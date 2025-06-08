@@ -1,3 +1,4 @@
+// Description: Main entry point for the Terraform provider plugin.
 package main
 
 import (

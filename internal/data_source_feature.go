@@ -47,8 +47,9 @@ func dataSourceFeature() *schema.Resource {
 				Computed: true,
 			},
 			"environments": {
-				Type:     schema.TypeMap,
-				Elem:     &schema.Schema{Type: schema.TypeString}, // For simplicity, you may want to expand this for full nested support
+				Type: schema.TypeMap,
+				// For simplicity, you may want to expand this for full nested support
+				Elem:     &schema.Schema{Type: schema.TypeString},
 				Computed: true,
 			},
 			"prerequisites": {
@@ -67,7 +68,7 @@ func dataSourceFeature() *schema.Resource {
 func dataSourceFeatureRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	client := m.(*growthbookapi.Client)
 	id := d.Get("id").(string)
-	feature, err := client.GetFeature(id)
+	feature, err := client.GetFeature(ctx, id)
 	if err != nil {
 		return diag.Diagnostics{
 			diag.Diagnostic{
@@ -76,10 +77,6 @@ func dataSourceFeatureRead(ctx context.Context, d *schema.ResourceData, m interf
 				Detail:   err.Error(),
 			},
 		}
-	}
-	if feature == nil {
-		d.SetId("")
-		return nil
 	}
 	d.SetId(feature.ID)
 	d.Set("archived", feature.Archived)
@@ -91,5 +88,6 @@ func dataSourceFeatureRead(ctx context.Context, d *schema.ResourceData, m interf
 	d.Set("tags", feature.Tags)
 	d.Set("environments", feature.Environments)
 	d.Set("prerequisites", feature.Prerequisites)
+
 	return nil
 }

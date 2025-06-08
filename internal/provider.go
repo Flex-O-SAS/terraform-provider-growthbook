@@ -1,3 +1,4 @@
+// Package internal provides the Terraform provider implementation for GrowthBook.
 package internal
 
 import (
@@ -12,6 +13,10 @@ import (
 	"terraform-provider-growthbook/internal/growthbookapi"
 )
 
+// Provider returns the Terraform provider schema.ResourceProvider for GrowthBook.
+// It defines the provider's configuration schema, sets up the API client, and
+// manages resources and data sources for GrowthBook projects, features, and
+// environments.
 func Provider() *schema.Provider {
 	return &schema.Provider{
 		Schema: map[string]*schema.Schema{
@@ -34,10 +39,11 @@ func Provider() *schema.Provider {
 				Description: "Timeout in seconds for HTTP requests to the GrowthBook API.",
 			},
 			"insecure_skip_verify": {
-				Type:        schema.TypeBool,
-				Optional:    true,
-				Default:     false,
-				Description: "If true, disables SSL certificate verification for GrowthBook API requests (not recommended for production).",
+				Type:     schema.TypeBool,
+				Optional: true,
+				Default:  false,
+				Description: "If true, disables SSL certificate verification for GrowthBook API requests " +
+					"(not recommended for production).",
 			},
 		},
 		ResourcesMap: map[string]*schema.Resource{
@@ -56,15 +62,15 @@ func Provider() *schema.Provider {
 	}
 }
 
-// configureProvider sets up the GrowthBook API client using provider configuration.
-func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}, diag.Diagnostics) {
+func configureProvider(_ context.Context, d *schema.ResourceData) (interface{}, diag.Diagnostics) {
 	apiKey := d.Get("api_key").(string)
 	if apiKey == "" {
 		return nil, diag.Diagnostics{
 			diag.Diagnostic{
 				Severity: diag.Error,
 				Summary:  "Missing GrowthBook API key",
-				Detail:   "The 'api_key' property must be set in the provider configuration or via the GROWTHBOOK_API_KEY environment variable.",
+				Detail: "The 'api_key' property must be set in the provider configuration " +
+					"or via the GROWTHBOOK_API_KEY environment variable.",
 			},
 		}
 	}
@@ -81,10 +87,10 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 	}
 
 	client := growthbookapi.NewClient(
-		ctx,
 		baseURL,
 		apiKey,
 		growthbookapi.WithHTTPClient(httpClient),
 	)
+
 	return client, nil
 }

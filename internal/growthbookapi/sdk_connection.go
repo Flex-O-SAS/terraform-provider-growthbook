@@ -1,26 +1,33 @@
+//nolint:dupl
+
 package growthbookapi
 
 import (
-	"encoding/json"
-	"fmt"
-	"io"
+	"context"
 	"net/http"
+
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-func (c *Client) CreateSDKConnection(s *SDKConnection) (*SDKConnection, error) {
-	resp, err := c.doRequest("POST", "/sdk-connections", s)
+type sdkConnectionResponse struct {
+	SDKConnection SDKConnection `json:"sdkConnection"`
+}
+type sdkConnectionListResponse struct {
+	SDKConnections []SDKConnection `json:"connections"`
+}
+
+// CreateSDKConnection creates a new SDK connection in GrowthBook.
+func (c *Client) CreateSDKConnection(ctx context.Context, s *SDKConnection) (*SDKConnection, error) {
+	out, err := doRequestAndDecode[sdkConnectionResponse](
+		ctx,
+		c,
+		"POST",
+		"/sdk-connections",
+		s,
+		http.StatusOK,
+		http.StatusCreated,
+	)
 	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		b, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("create sdkconnection failed: %s", string(b))
-	}
-	var out struct {
-		SDKConnection SDKConnection `json:"sdkConnection"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		return nil, err
 	}
 	if len(out.SDKConnection.Languages) != 0 {
@@ -29,23 +36,10 @@ func (c *Client) CreateSDKConnection(s *SDKConnection) (*SDKConnection, error) {
 	return &out.SDKConnection, nil
 }
 
-func (c *Client) GetSDKConnection(id string) (*SDKConnection, error) {
-	resp, err := c.doRequest("GET", "/sdk-connections/"+id, nil)
+// GetSDKConnection fetches an SDK connection by its ID.
+func (c *Client) GetSDKConnection(ctx context.Context, id string) (*SDKConnection, error) {
+	out, err := doRequestAndDecode[sdkConnectionResponse](ctx, c, "GET", "/sdk-connections/"+id, nil, http.StatusOK)
 	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, ErrNotFound
-	}
-	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("get sdkconnection failed: %s", string(b))
-	}
-	var out struct {
-		SDKConnection SDKConnection `json:"sdkConnection"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		return nil, err
 	}
 	if len(out.SDKConnection.Languages) != 0 {
@@ -54,20 +48,10 @@ func (c *Client) GetSDKConnection(id string) (*SDKConnection, error) {
 	return &out.SDKConnection, nil
 }
 
-func (c *Client) UpdateSDKConnection(id string, s *SDKConnection) (*SDKConnection, error) {
-	resp, err := c.doRequest("PUT", "/sdk-connections/"+id, s)
+// UpdateSDKConnection updates an existing SDK connection by its ID.
+func (c *Client) UpdateSDKConnection(ctx context.Context, id string, s *SDKConnection) (*SDKConnection, error) {
+	out, err := doRequestAndDecode[sdkConnectionResponse](ctx, c, "PUT", "/sdk-connections/"+id, s, http.StatusOK)
 	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("update sdkconnection failed: %s", string(b))
-	}
-	var out struct {
-		SDKConnection SDKConnection `json:"sdkConnection"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		return nil, err
 	}
 	if len(out.SDKConnection.Languages) != 0 {
@@ -76,45 +60,36 @@ func (c *Client) UpdateSDKConnection(id string, s *SDKConnection) (*SDKConnectio
 	return &out.SDKConnection, nil
 }
 
-func (c *Client) DeleteSDKConnection(id string) error {
-	resp, err := c.doRequest("DELETE", "/sdk-connections/"+id, nil)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		b, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("delete sdkconnection failed: %s", string(b))
-	}
-	return nil
+// DeleteSDKConnection deletes an SDK connection by its ID.
+func (c *Client) DeleteSDKConnection(ctx context.Context, id string) error {
+	return c.doDeleteRequest(ctx, "/sdk-connections/"+id, http.StatusOK, http.StatusNoContent)
 }
 
 // FindSDKConnectionByName searches for an SDK connection by its name and returns the first match.
-func (c *Client) FindSDKConnectionByName(name string) (*SDKConnection, error) {
-	resp, err := c.doRequest("GET", "/sdk-connections", nil)
+func (c *Client) FindSDKConnectionByName(ctx context.Context, name string) (*SDKConnection, error) {
+	tflog.Debug(ctx,
+		"searching for sdk-connection by name",
+		map[string]interface{}{
+			"name": name,
+		},
+	)
+
+	sdks, err := doRequestAndDecode[sdkConnectionListResponse](ctx, c, "GET", "/sdk-connections", nil, http.StatusOK)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("list sdk connections failed: %s", string(b))
-	}
-	var sdks struct {
-		Connections []SDKConnection `json:"connections"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&sdks); err != nil {
-		return nil, err
-	}
-	for _, s := range sdks.Connections {
+	for _, s := range sdks.SDKConnections {
 		if s.Name == name {
+			if len(s.Languages) != 0 {
+				s.Language = s.Languages[0]
+			}
 			return &s, nil
 		}
 	}
-	return nil, ErrNotFound // not found
+	return nil, ErrNotFound
 }
 
 // FindSDKConnectionByID fetches an SDK connection by its ID.
-func (c *Client) FindSDKConnectionByID(id string) (*SDKConnection, error) {
-	return c.GetSDKConnection(id)
+func (c *Client) FindSDKConnectionByID(ctx context.Context, id string) (*SDKConnection, error) {
+	return c.GetSDKConnection(ctx, id)
 }

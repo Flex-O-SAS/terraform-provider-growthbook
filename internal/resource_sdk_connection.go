@@ -158,7 +158,7 @@ func resourceSDKConnectionCreate(ctx context.Context, d *schema.ResourceData, m 
 		sdkConn.IncludeRedirectExperiments = v.(bool)
 	}
 	if v, ok := d.GetOk("include_rule_ids"); ok {
-		sdkConn.IncludeRuleIds = v.(bool)
+		sdkConn.IncludeRuleIDs = v.(bool)
 	}
 	if v, ok := d.GetOk("proxy_enabled"); ok {
 		sdkConn.ProxyEnabled = v.(bool)
@@ -175,18 +175,19 @@ func resourceSDKConnectionCreate(ctx context.Context, d *schema.ResourceData, m 
 	if v, ok := d.GetOk("saved_group_references_enabled"); ok {
 		sdkConn.SavedGroupReferencesEnabled = v.(bool)
 	}
-	created, err := client.CreateSDKConnection(sdkConn)
+	created, err := client.CreateSDKConnection(ctx, sdkConn)
 	if err != nil {
 		return diag.Errorf("error creating SDK connection: %s", err)
 	}
 	d.SetId(created.ID)
+
 	return resourceSDKConnectionRead(ctx, d, m)
 }
 
 func resourceSDKConnectionRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	client := m.(*growthbookapi.Client)
 	id := d.Id()
-	sdkConn, err := client.GetSDKConnection(id)
+	sdkConn, err := client.GetSDKConnection(ctx, id)
 	if err != nil {
 		return diag.Errorf("error reading SDK connection: %s", err)
 	}
@@ -200,7 +201,7 @@ func resourceSDKConnectionRead(ctx context.Context, d *schema.ResourceData, m in
 	d.Set("include_draft_experiments", sdkConn.IncludeDraftExperiments)
 	d.Set("include_experiment_names", sdkConn.IncludeExperimentNames)
 	d.Set("include_redirect_experiments", sdkConn.IncludeRedirectExperiments)
-	d.Set("include_rule_ids", sdkConn.IncludeRuleIds)
+	d.Set("include_rule_ids", sdkConn.IncludeRuleIDs)
 	d.Set("proxy_enabled", sdkConn.ProxyEnabled)
 	d.Set("proxy_host", sdkConn.ProxyHost)
 	d.Set("hash_secure_attributes", sdkConn.HashSecureAttributes)
@@ -214,6 +215,7 @@ func resourceSDKConnectionRead(ctx context.Context, d *schema.ResourceData, m in
 	d.Set("sse_enabled", sdkConn.SseEnabled)
 	d.Set("date_created", sdkConn.DateCreated)
 	d.Set("date_updated", sdkConn.DateUpdated)
+
 	return nil
 }
 
@@ -252,7 +254,7 @@ func resourceSDKConnectionUpdate(ctx context.Context, d *schema.ResourceData, m 
 		sdkConn.IncludeRedirectExperiments = v.(bool)
 	}
 	if v, ok := d.GetOk("include_rule_ids"); ok {
-		sdkConn.IncludeRuleIds = v.(bool)
+		sdkConn.IncludeRuleIDs = v.(bool)
 	}
 	if v, ok := d.GetOk("proxy_enabled"); ok {
 		sdkConn.ProxyEnabled = v.(bool)
@@ -269,19 +271,21 @@ func resourceSDKConnectionUpdate(ctx context.Context, d *schema.ResourceData, m 
 	if v, ok := d.GetOk("saved_group_references_enabled"); ok {
 		sdkConn.SavedGroupReferencesEnabled = v.(bool)
 	}
-	_, err := client.UpdateSDKConnection(id, sdkConn)
+	_, err := client.UpdateSDKConnection(ctx, id, sdkConn)
 	if err != nil {
 		return diag.Errorf("error updating SDK connection: %s", err)
 	}
+
 	return resourceSDKConnectionRead(ctx, d, m)
 }
 
 func resourceSDKConnectionDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	client := m.(*growthbookapi.Client)
 	id := d.Id()
-	if err := client.DeleteSDKConnection(id); err != nil {
+	if err := client.DeleteSDKConnection(ctx, id); err != nil {
 		return diag.Errorf("error deleting SDK connection: %s", err)
 	}
 	d.SetId("")
+
 	return nil
 }

@@ -63,18 +63,19 @@ func resourceEnvironmentCreate(ctx context.Context, d *schema.ResourceData, m in
 		}
 		env.Projects = projects
 	}
-	created, err := client.CreateEnvironment(env)
+	created, err := client.CreateEnvironment(ctx, env)
 	if err != nil {
 		return diag.Errorf("error creating environment: %v", err)
 	}
 	d.SetId(created.ID)
+
 	return resourceEnvironmentRead(ctx, d, m)
 }
 
 func resourceEnvironmentRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	client := m.(*growthbookapi.Client)
 	id := d.Id()
-	env, err := client.FindEnvironmentByID(id)
+	env, err := client.FindEnvironmentByID(ctx, id)
 	if err != nil {
 		return diag.Errorf("error reading environment: %v", err)
 	}
@@ -83,6 +84,7 @@ func resourceEnvironmentRead(ctx context.Context, d *schema.ResourceData, m inte
 	d.Set("toggle_on_list", env.ToggleOnList)
 	d.Set("default_state", env.DefaultState)
 	d.Set("projects", env.Projects)
+
 	return nil
 }
 
@@ -101,19 +103,21 @@ func resourceEnvironmentUpdate(ctx context.Context, d *schema.ResourceData, m in
 		}
 		env.Projects = projects
 	}
-	_, err := client.UpdateEnvironment(id, env)
+	_, err := client.UpdateEnvironment(ctx, id, env)
 	if err != nil {
 		return diag.Errorf("error updating environment: %v", err)
 	}
+
 	return resourceEnvironmentRead(ctx, d, m)
 }
 
 func resourceEnvironmentDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	client := m.(*growthbookapi.Client)
 	id := d.Id()
-	if err := client.DeleteEnvironment(id); err != nil {
+	if err := client.DeleteEnvironment(ctx, id); err != nil {
 		return diag.Errorf("Failed to delete environment: %s", err)
 	}
 	d.SetId("")
+
 	return nil
 }

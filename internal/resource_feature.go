@@ -45,6 +45,7 @@ func resourceFeature() *schema.Resource {
 			"value_type": {
 				Type:     schema.TypeString,
 				Required: true,
+				ForceNew: true,
 			},
 			"default_value": {
 				Type:     schema.TypeString,
@@ -56,8 +57,9 @@ func resourceFeature() *schema.Resource {
 				Optional: true,
 			},
 			"environments": {
-				Type:     schema.TypeMap,
-				Elem:     &schema.Schema{Type: schema.TypeString}, // For simplicity, you may want to expand this for full nested support
+				Type: schema.TypeMap,
+				// For simplicity, you may want to expand this for full nested support
+				Elem:     &schema.Schema{Type: schema.TypeString},
 				Optional: true,
 			},
 			"prerequisites": {
@@ -71,34 +73,18 @@ func resourceFeature() *schema.Resource {
 
 func resourceFeatureCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	client := m.(*growthbookapi.Client)
-	name := d.Get("name").(string)
 	feature := &growthbookapi.Feature{
-		ID:           name,
+		ID:           d.Get("name").(string),
 		Description:  d.Get("description").(string),
-		Archived:     d.Get("archived").(bool),
 		Owner:        d.Get("owner").(string),
 		Project:      d.Get("project").(string),
 		ValueType:    d.Get("value_type").(string),
 		DefaultValue: d.Get("default_value").(string),
+		Tags:         expandStringList(d.Get("tags")),
 	}
-	if v, ok := d.GetOk("tags"); ok {
-		tags := []string{}
-		for _, t := range v.([]interface{}) {
-			tags = append(tags, t.(string))
-		}
-		feature.Tags = tags
-	}
-	if v, ok := d.GetOk("prerequisites"); ok {
-		prereqs := []string{}
-		for _, p := range v.([]interface{}) {
-			prereqs = append(prereqs, p.(string))
-		}
-		feature.Prerequisites = prereqs
-	}
-	// Note: environments is a complex map, skipping for now unless you want full support
-	created, err := client.CreateFeature(feature)
+	created, err := client.CreateFeature(ctx, feature)
 	if err != nil {
-		return diag.Errorf("Failed to create feature: %s", err)
+		return diag.Errorf("error creating feature: %v", err)
 	}
 	d.SetId(created.ID)
 	return resourceFeatureRead(ctx, d, m)
@@ -107,20 +93,18 @@ func resourceFeatureCreate(ctx context.Context, d *schema.ResourceData, m interf
 func resourceFeatureRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	client := m.(*growthbookapi.Client)
 	id := d.Id()
-	feature, err := client.GetFeature(id)
+	feature, err := client.GetFeature(ctx, id)
 	if err != nil {
 		return diag.Errorf("error reading feature: %v", err)
 	}
-	d.Set("name", id)
-	d.Set("archived", feature.Archived)
+	d.Set("id", feature.ID)
+	d.Set("name", feature.ID)
 	d.Set("description", feature.Description)
 	d.Set("owner", feature.Owner)
 	d.Set("project", feature.Project)
 	d.Set("value_type", feature.ValueType)
 	d.Set("default_value", feature.DefaultValue)
 	d.Set("tags", feature.Tags)
-	d.Set("environments", feature.Environments)
-	d.Set("prerequisites", feature.Prerequisites)
 	return nil
 }
 
@@ -129,29 +113,15 @@ func resourceFeatureUpdate(ctx context.Context, d *schema.ResourceData, m interf
 	id := d.Id()
 	feature := &growthbookapi.Feature{
 		Description:  d.Get("description").(string),
-		Archived:     d.Get("archived").(bool),
 		Owner:        d.Get("owner").(string),
 		Project:      d.Get("project").(string),
 		ValueType:    d.Get("value_type").(string),
 		DefaultValue: d.Get("default_value").(string),
+		Tags:         expandStringList(d.Get("tags")),
 	}
-	if v, ok := d.GetOk("tags"); ok {
-		tags := []string{}
-		for _, t := range v.([]interface{}) {
-			tags = append(tags, t.(string))
-		}
-		feature.Tags = tags
-	}
-	if v, ok := d.GetOk("prerequisites"); ok {
-		prereqs := []string{}
-		for _, p := range v.([]interface{}) {
-			prereqs = append(prereqs, p.(string))
-		}
-		feature.Prerequisites = prereqs
-	}
-	_, err := client.UpdateFeature(id, feature)
+	_, err := client.UpdateFeature(ctx, id, feature)
 	if err != nil {
-		return diag.Errorf("Failed to update feature: %s", err)
+		return diag.Errorf("error updating feature: %v", err)
 	}
 	return resourceFeatureRead(ctx, d, m)
 }
@@ -159,9 +129,20 @@ func resourceFeatureUpdate(ctx context.Context, d *schema.ResourceData, m interf
 func resourceFeatureDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	client := m.(*growthbookapi.Client)
 	id := d.Id()
-	if err := client.DeleteFeature(id); err != nil {
+	if err := client.DeleteFeature(ctx, id); err != nil {
 		return diag.Errorf("Failed to delete feature: %s", err)
 	}
 	d.SetId("")
 	return nil
+}
+
+func expandStringList(input interface{}) []string {
+	if input == nil {
+		return nil
+	}
+	list := []string{}
+	for _, v := range input.([]interface{}) {
+		list = append(list, v.(string))
+	}
+	return list
 }

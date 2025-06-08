@@ -1,79 +1,52 @@
 package growthbookapi
 
 import (
-	"encoding/json"
-	"fmt"
-	"io"
+	"context"
 	"net/http"
 )
 
-func (c *Client) CreateEnvironment(e *Environment) (*Environment, error) {
-	resp, err := c.doRequest("POST", "/environments", e)
+type environmentResponse struct {
+	Environment Environment `json:"environment"`
+}
+type environmentListResponse struct {
+	Environments []Environment `json:"environments"`
+}
+
+// CreateEnvironment creates a new environment in GrowthBook.
+func (c *Client) CreateEnvironment(ctx context.Context, e *Environment) (*Environment, error) {
+	out, err := doRequestAndDecode[environmentResponse](
+		ctx,
+		c,
+		"POST",
+		"/environments",
+		e,
+		http.StatusOK,
+		http.StatusCreated,
+	)
 	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		b, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("create environment failed: %s", string(b))
-	}
-	var out struct {
-		Environment Environment `json:"environment"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		return nil, err
 	}
 	return &out.Environment, nil
 }
 
-func (c *Client) UpdateEnvironment(id string, e *Environment) (*Environment, error) {
-	resp, err := c.doRequest("PUT", "/environments/"+id, e)
+// UpdateEnvironment updates an existing environment by its ID.
+func (c *Client) UpdateEnvironment(ctx context.Context, id string, e *Environment) (*Environment, error) {
+	out, err := doRequestAndDecode[environmentResponse](ctx, c, "PUT", "/environments/"+id, e, http.StatusOK)
 	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("update environment failed: %s", string(b))
-	}
-	var out struct {
-		Environment Environment `json:"environment"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		return nil, err
 	}
 	return &out.Environment, nil
 }
 
-func (c *Client) DeleteEnvironment(id string) error {
-	resp, err := c.doRequest("DELETE", "/environments/"+id, nil)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		b, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("delete environment failed: %s", string(b))
-	}
-	return nil
+// DeleteEnvironment deletes an environment by its ID.
+func (c *Client) DeleteEnvironment(ctx context.Context, id string) error {
+	return c.doDeleteRequest(ctx, "/environments/"+id, http.StatusOK, http.StatusNoContent)
 }
 
 // FindEnvironmentByID fetches an environment by its ID by listing all and filtering.
-func (c *Client) FindEnvironmentByID(id string) (*Environment, error) {
-	resp, err := c.doRequest("GET", "/environments", nil)
+func (c *Client) FindEnvironmentByID(ctx context.Context, id string) (*Environment, error) {
+	envs, err := doRequestAndDecode[environmentListResponse](ctx, c, "GET", "/environments", nil, http.StatusOK)
 	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("list environments failed: %s", string(b))
-	}
-	var envs struct {
-		Environments []Environment `json:"environments"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&envs); err != nil {
 		return nil, err
 	}
 	for _, env := range envs.Environments {

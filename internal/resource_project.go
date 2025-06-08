@@ -48,9 +48,6 @@ func resourceProject() *schema.Resource {
 
 func resourceProjectCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	client := m.(*growthbookapi.Client)
-	if d.Get("name").(string) == "" {
-		return diag.Errorf("Name must be provided for the project.")
-	}
 	project := &growthbookapi.Project{
 		Name:        d.Get("name").(string),
 		Description: d.Get("description").(string),
@@ -58,30 +55,30 @@ func resourceProjectCreate(ctx context.Context, d *schema.ResourceData, m interf
 	if v, ok := d.GetOk("stats_engine"); ok {
 		project.Settings.StatsEngine = v.(string)
 	}
-	created, err := client.CreateProject(project)
+	created, err := client.CreateProject(ctx, project)
 	if err != nil {
-		return diag.Errorf("Failed to create project: %s", err)
+		return diag.Errorf("error creating project: %v", err)
 	}
 	d.SetId(created.ID)
-	d.Set("date_created", created.DateCreated)
-	d.Set("date_updated", created.DateUpdated)
+
 	return resourceProjectRead(ctx, d, m)
 }
 
 func resourceProjectRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	client := m.(*growthbookapi.Client)
 	id := d.Id()
-	project, err := client.GetProject(id)
+	project, err := client.GetProject(ctx, id)
 	if err != nil {
-		return diag.Errorf("Failed to read project: %s", err)
+		return diag.Errorf("error reading project: %v", err)
 	}
 	d.Set("name", project.Name)
 	d.Set("description", project.Description)
-	d.Set("settings", []interface{}{
-		project.Settings,
-	})
+	if project.Settings.StatsEngine != "" {
+		d.Set("stats_engine", project.Settings.StatsEngine)
+	}
 	d.Set("date_created", project.DateCreated)
 	d.Set("date_updated", project.DateUpdated)
+
 	return nil
 }
 
@@ -98,20 +95,22 @@ func resourceProjectUpdate(ctx context.Context, d *schema.ResourceData, m interf
 	if v, ok := d.GetOk("stats_engine"); ok {
 		project.Settings.StatsEngine = v.(string)
 	}
-	updated, err := client.UpdateProject(id, project)
+	updated, err := client.UpdateProject(ctx, id, project)
 	if err != nil {
-		return diag.Errorf("Failed to update project: %s", err)
+		return diag.Errorf("error updating project: %v", err)
 	}
 	d.Set("date_updated", updated.DateUpdated)
+
 	return resourceProjectRead(ctx, d, m)
 }
 
 func resourceProjectDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	client := m.(*growthbookapi.Client)
 	id := d.Id()
-	if err := client.DeleteProject(id); err != nil {
+	if err := client.DeleteProject(ctx, id); err != nil {
 		return diag.Errorf("Failed to delete project: %s", err)
 	}
 	d.SetId("")
+
 	return nil
 }

@@ -1,5 +1,6 @@
 package growthbookapi
 
+// Project represents a GrowthBook project object.
 type Project struct {
 	ID          string          `json:"id,omitempty"`
 	Name        string          `json:"name"`
@@ -9,85 +10,65 @@ type Project struct {
 	DateUpdated string          `json:"dateUpdated,omitempty"`
 }
 
+// ProjectSettings holds the settings for a GrowthBook project.
 type ProjectSettings struct {
 	StatsEngine string `json:"statsEngine,omitempty"`
 }
 
+// Feature represents a GrowthBook feature object.
 type Feature struct {
-	ID            string                       `json:"id,omitempty"`
-	Archived      bool                         `json:"archived"`
-	Description   string                       `json:"description,omitempty"`
-	Owner         string                       `json:"owner,omitempty"`
-	Project       string                       `json:"project,omitempty"`
-	ValueType     string                       `json:"valueType,omitempty"`
-	DefaultValue  string                       `json:"defaultValue,omitempty"`
-	Tags          []string                     `json:"tags,omitempty"`
-	Environments  map[string]EnvironmentConfig `json:"environments,omitempty"`
-	Prerequisites []string                     `json:"prerequisites,omitempty"`
+	ID            string                              `json:"id,omitempty"`
+	Archived      bool                                `json:"archived"`
+	Description   string                              `json:"description,omitempty"`
+	Owner         string                              `json:"owner,omitempty"`
+	Project       string                              `json:"project,omitempty"`
+	ValueType     string                              `json:"valueType,omitempty"`
+	DefaultValue  string                              `json:"defaultValue,omitempty"`
+	Tags          []string                            `json:"tags"`
+	Environments  map[string]FeatureEnvironmentConfig `json:"-"`
+	Prerequisites []string                            `json:"prerequisites"`
 }
 
-type EnvironmentConfig struct {
-	Enabled    bool   `json:"enabled"`
-	Rules      []Rule `json:"rules"`
-	Definition string `json:"definition,omitempty"`
-	Draft      *Draft `json:"draft,omitempty"`
+// FeatureEnvironmentConfig holds the configuration for a GrowthBook environment.
+type FeatureEnvironmentConfig struct {
+	Enabled      bool          `json:"enabled"`
+	DefaultValue string        `json:"defaultValue,omitempty"`
+	Definition   string        `json:"definition,omitempty"`
+	Rules        []FeatureRule `json:"rules"`
 }
 
-type Rule struct {
-	Type                   string                `json:"type"`
-	Value                  string                `json:"value,omitempty"`
-	Coverage               float64               `json:"coverage,omitempty"`
-	HashAttribute          string                `json:"hashAttribute,omitempty"`
-	Condition              string                `json:"condition,omitempty"`
-	Description            string                `json:"description,omitempty"`
-	SavedGroupTargeting    []SavedGroupTargeting `json:"savedGroupTargeting,omitempty"`
-	ID                     string                `json:"id,omitempty"`
-	Enabled                bool                  `json:"enabled"`
-	Prerequisites          []Prerequisite        `json:"prerequisites,omitempty"`
-	Variations             []Variation           `json:"variations,omitempty"`
-	ExperimentID           string                `json:"experimentId,omitempty"`
-	TrackingKey            string                `json:"trackingKey,omitempty"`
-	FallbackAttribute      string                `json:"fallbackAttribute,omitempty"`
-	DisableStickyBucketing bool                  `json:"disableStickyBucketing"`
-	BucketVersion          float64               `json:"bucketVersion,omitempty"`
-	MinBucketVersion       float64               `json:"minBucketVersion,omitempty"`
-	Namespace              *Namespace            `json:"namespace,omitempty"`
-	Values                 []Value               `json:"values,omitempty"`
+// FeatureRule represents a targeting rule for a feature in GrowthBook.
+type FeatureRule struct {
+	Condition           string                       `json:"condition,omitempty"`
+	Description         string                       `json:"description,omitempty"`
+	ID                  string                       `json:"id,omitempty"`
+	Enabled             bool                         `json:"enabled"`
+	Type                string                       `json:"type"`
+	Value               string                       `json:"value,omitempty"`
+	SavedGroupTargeting []FeatureSavedGroupTargeting `json:"savedGroupTargeting"`
+	Prerequisites       []FeaturePrerequisite        `json:"prerequisites,omitempty"`
 }
 
-type SavedGroupTargeting struct {
-	MatchType   string   `json:"matchType"`
+// FeatureSavedGroupTargeting represents targeting configuration based on saved groups.
+type FeatureSavedGroupTargeting struct {
+	MatchType   string   `json:"matchType,omitempty"`
 	SavedGroups []string `json:"savedGroups"`
 }
 
-type Prerequisite struct {
+// FeaturePrerequisite represents a prerequisite for a rule or variation.
+type FeaturePrerequisite struct {
 	ID        string `json:"id"`
 	Condition string `json:"condition"`
 }
 
-type Variation struct {
-	Value       string `json:"value"`
-	VariationID string `json:"variationId"`
+// FeatureDraft represents a draft configuration for a feature.
+type FeatureDraft struct {
+	Enabled    bool          `json:"enabled"`
+	Rules      []FeatureRule `json:"rules"`
+	Definition string        `json:"definition,omitempty"`
 }
 
-type Namespace struct {
-	Enabled bool      `json:"enabled"`
-	Name    string    `json:"name"`
-	Range   []float64 `json:"range"`
-}
-
-type Value struct {
-	Value  string  `json:"value"`
-	Weight float64 `json:"weight"`
-	Name   string  `json:"name,omitempty"`
-}
-
-type Draft struct {
-	Enabled    bool   `json:"enabled"`
-	Rules      []Rule `json:"rules"`
-	Definition string `json:"definition,omitempty"`
-}
-
+// Environment represents a GrowthBook environment object.
 type Environment struct {
 	ID           string   `json:"id,omitempty"`
 	Description  string   `json:"description,omitempty"`
@@ -96,6 +77,7 @@ type Environment struct {
 	Projects     []string `json:"projects,omitempty"`
 }
 
+// SDKConnection represents a GrowthBook SDK Connection object.
 type SDKConnection struct {
 	ID          string `json:"id,omitempty"`
 	Name        string `json:"name"`
@@ -111,7 +93,7 @@ type SDKConnection struct {
 	IncludeDraftExperiments     bool     `json:"includeDraftExperiments"`
 	IncludeExperimentNames      bool     `json:"includeExperimentNames"`
 	IncludeRedirectExperiments  bool     `json:"includeRedirectExperiments"`
-	IncludeRuleIds              bool     `json:"includeRuleIds"`
+	IncludeRuleIDs              bool     `json:"includeRuleIds"`
 	ProxyEnabled                bool     `json:"proxyEnabled"`
 	ProxyHost                   string   `json:"proxyHost,omitempty"`
 	HashSecureAttributes        bool     `json:"hashSecureAttributes"`

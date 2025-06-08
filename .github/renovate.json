@@ -1,0 +1,17 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:base"],
+  "commitMessagePrefix": "chore: ",
+  "prTitlePrefix": "chore: ",
+  "labels": ["dep"],
+  "packageRules": [
+    {
+      "matchManagers": ["github-actions"],
+      "labels": ["dep"],
+      "prBodyNotes": ["Updates GitHub Actions workflow versions."],
+      "addLabels": ["dep"],
+      "semanticCommitType": "chore"
+    }
+  ],
+  "enabledManagers": ["gomod", "github-actions"]
+}

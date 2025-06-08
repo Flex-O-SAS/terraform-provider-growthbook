@@ -1,0 +1,28 @@
+# docker-compose.yml
+version: "3"
+services:
+  mongo:
+    image: "mongo:latest"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=password
+    volumes:
+      - mongodata:/data/db
+  growthbook:
+    image: "growthbook/growthbook:latest"
+    ports:
+      - "3000:3000"
+      - "3100:3100"
+    depends_on:
+      - mongo
+    environment:
+      - API_RATE_LIMIT_MAX=6000
+      - MONGODB_URI=mongodb://root:password@mongo:27017/growthbook?authSource=admin
+      - SECRET_API_KEY=testaccount
+      # - API_HOST=http://localhost:3100
+    volumes:
+      - uploads:/usr/local/src/app/packages/back-end/uploads
+
+volumes:
+  uploads:
+  mongodata:

@@ -8,7 +8,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
-// dataSourceProject returns the schema and read logic for the GrowthBook project data source.
 func dataSourceProject() *schema.Resource {
 	return &schema.Resource{
 		ReadContext: dataSourceProjectRead,
@@ -50,7 +49,7 @@ func dataSourceProject() *schema.Resource {
 func dataSourceProjectRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	client := m.(*growthbookapi.Client)
 	name := d.Get("name").(string)
-	project, err := client.FindProjectByName(name)
+	project, err := client.FindProjectByName(ctx, name)
 	if err != nil {
 		return diag.Diagnostics{
 			diag.Diagnostic{
@@ -60,15 +59,12 @@ func dataSourceProjectRead(ctx context.Context, d *schema.ResourceData, m interf
 			},
 		}
 	}
-	if project == nil {
-		d.SetId("")
-		return nil
-	}
 	d.SetId(project.ID)
 	d.Set("name", project.Name)
 	d.Set("description", project.Description)
 	d.Set("stats_engine", project.Settings.StatsEngine)
 	d.Set("date_created", project.DateCreated)
 	d.Set("date_updated", project.DateUpdated)
+
 	return nil
 }

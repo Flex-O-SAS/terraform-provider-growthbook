@@ -1,83 +1,43 @@
+<!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
+**Table of Contents**
+
+- [GrowthBook Terraform Provider](#growthbook-terraform-provider)
+- [Documentation](#documentation)
+- [Contributing](#contributing)
+  - [Acceptance tests](#acceptance-tests)
+
+<!-- markdown-toc end -->
+
+
 # GrowthBook Terraform Provider
 
-The GrowthBook Terraform Provider enables you to manage GrowthBook resources (projects, features, environments, metrics, data sources, experiments, groups, segments, API keys, webhooks, integrations, SDK connections, members, and organizations) via Terraform.
+This Terraform provider allows you to manage GrowthBook resources and retrieve data from
+your GrowthBook instance using Terraform.
 
-## Requirements
+This is poorly written using AI as a bootstrap and covers only basic use cases.
 
-- [Terraform](https://www.terraform.io/downloads.html) 0.13+
-- GrowthBook account and API key
 
-## Provider Configuration
+# Documentation
 
-```hcl
-provider "growthbook" {
-  api_key              = "<your_growthbook_api_key>" # or set GROWTHBOOK_API_KEY env var
-  api_url              = "https://app.growthbook.io/api/v1" # optional, override for self-hosted
-  http_timeout         = 60 # optional, HTTP timeout in seconds (default: 60)
-  insecure_skip_verify = false # optional, skip SSL verification (not recommended)
-}
+See the [docs](./docs/) directory for detailed documentation.
+
+# Contributing
+
+## Acceptance tests
+
+The repository runs acceptance tests against a running instance of growthbook.
+This can be either cloud (not recommended) or a local instance spawned with docker.
+
 ```
+#start instance
+export GROWTHBOOK_API_KEY=$(docker-compose -f ./acceptance/docker-compose.yml up -d > /dev/null && sleep 2 && ./acceptance/startup.sh)
 
-### Arguments
+# run tests
+GROWTHBOOK_API_URL=http://localhost:3100/api/v1  TF_ACC=1 go test ./...
 
-| Name                  | Type    | Required | Default                                 | Description                                                                 |
-|-----------------------|---------|----------|-----------------------------------------|-----------------------------------------------------------------------------|
-| `api_key`             | string  | yes      |                                         | GrowthBook API key. Can also be set via `GROWTHBOOK_API_KEY` env variable.  |
-| `api_url`             | string  | no       | `https://app.growthbook.io/api/v1`      | GrowthBook API base URL.                                                    |
-| `http_timeout`        | int     | no       | `60`                                    | Timeout (in seconds) for HTTP requests.                                     |
-| `insecure_skip_verify`| bool    | no       | `false`                                 | If true, disables SSL certificate verification (not recommended for prod).   |
+# run test with debug output from the provider
+TF_LOG=debug GROWTHBOOK_API_URL=http://localhost:3100/api/v1  TF_ACC=1 go test ./...
 
-## Resources
-
-- `growthbook_project`
-- `growthbook_feature`
-- `growthbook_environment`
-- `growthbook_metric`
-- `growthbook_data_source`
-- `growthbook_experiment`
-- `growthbook_group`
-- `growthbook_segment`
-- `growthbook_api_key`
-- `growthbook_webhook`
-- `growthbook_integration`
-- `growthbook_sdk_connection`
-- `growthbook_member`
-- `growthbook_organization`
-
-See the [docs](https://registry.terraform.io/providers/growthbook/growthbook/latest/docs/resources) for resource-specific arguments and import instructions.
-
-## Import
-
-All resources support import. For example:
-
-```sh
-terraform import growthbook_project.example <project_id>
+# cleanup growthbook instance (with volumes)
+docker-compose -f ./acceptance/docker-compose.yml down -v
 ```
-
-## Example Usage
-
-```hcl
-provider "growthbook" {
-  api_key = var.growthbook_api_key
-}
-
-resource "growthbook_project" "example" {
-  name = "My Project"
-}
-
-resource "growthbook_feature" "example" {
-  project_id = growthbook_project.example.id
-  key        = "my-feature"
-  name       = "My Feature"
-}
-```
-
-## Logging
-
-All API requests and responses are logged using Go's slog as structured JSON. API keys are redacted from logs. Logging output and level can be configured in future releases.
-
-## Error Handling
-
-All errors are reported with user-friendly messages and diagnostics. HTTP timeouts and SSL errors are surfaced clearly.
-
-

@@ -12,14 +12,15 @@ func dataSourceSDKConnection() *schema.Resource {
 	return &schema.Resource{
 		ReadContext: dataSourceSDKConnectionRead,
 		Schema: map[string]*schema.Schema{
-			"id": {
-				Type:     schema.TypeString,
-				Computed: true,
-			},
 			"name": {
 				Type:        schema.TypeString,
 				Required:    true,
 				Description: "The name of the SDK Connection.",
+			},
+			"id": {
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: "The unique identifier for the SDK Connection.",
 			},
 			"organization": {
 				Type:        schema.TypeString,
@@ -140,7 +141,7 @@ func dataSourceSDKConnection() *schema.Resource {
 func dataSourceSDKConnectionRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	client := m.(*growthbookapi.Client)
 	name := d.Get("name").(string)
-	sdkConn, err := client.FindSDKConnectionByName(name)
+	sdkConn, err := client.FindSDKConnectionByName(ctx, name)
 	if err != nil {
 		return diag.Errorf("error reading SDK connection: %s", err)
 	}
@@ -157,7 +158,7 @@ func dataSourceSDKConnectionRead(ctx context.Context, d *schema.ResourceData, m 
 	d.Set("include_draft_experiments", sdkConn.IncludeDraftExperiments)
 	d.Set("include_experiment_names", sdkConn.IncludeExperimentNames)
 	d.Set("include_redirect_experiments", sdkConn.IncludeRedirectExperiments)
-	d.Set("include_rule_ids", sdkConn.IncludeRuleIds)
+	d.Set("include_rule_ids", sdkConn.IncludeRuleIDs)
 	d.Set("key", sdkConn.Key)
 	d.Set("proxy_enabled", sdkConn.ProxyEnabled)
 	d.Set("proxy_host", sdkConn.ProxyHost)
@@ -168,5 +169,6 @@ func dataSourceSDKConnectionRead(ctx context.Context, d *schema.ResourceData, m 
 	d.Set("saved_group_references_enabled", sdkConn.SavedGroupReferencesEnabled)
 	d.Set("date_created", sdkConn.DateCreated)
 	d.Set("date_updated", sdkConn.DateUpdated)
+
 	return nil
 }

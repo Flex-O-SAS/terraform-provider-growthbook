@@ -45,7 +45,7 @@ func dataSourceEnvironment() *schema.Resource {
 func dataSourceEnvironmentRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	client := m.(*growthbookapi.Client)
 	id := d.Get("id").(string)
-	env, err := client.FindEnvironmentByID(id)
+	env, err := client.FindEnvironmentByID(ctx, id)
 	if err != nil {
 		return diag.Diagnostics{
 			diag.Diagnostic{
@@ -55,14 +55,11 @@ func dataSourceEnvironmentRead(ctx context.Context, d *schema.ResourceData, m in
 			},
 		}
 	}
-	if env == nil {
-		d.SetId("")
-		return nil
-	}
 	d.SetId(env.ID)
 	d.Set("description", env.Description)
 	d.Set("toggle_on_list", env.ToggleOnList)
 	d.Set("default_state", env.DefaultState)
 	d.Set("projects", env.Projects)
+
 	return nil
 }

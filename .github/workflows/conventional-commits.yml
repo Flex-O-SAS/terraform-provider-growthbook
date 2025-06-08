@@ -1,0 +1,18 @@
+name: conventional-commits
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited]
+    branches:
+      - main
+
+jobs:
+  conventional-commits:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+      - name: validate commit message
+        uses: Flex-O-SAS/jira-conventional-commits@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}

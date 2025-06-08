@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema/v2.0.0.json
+version: 2
+
+builds:
+  - id: terraform-provider-growthbook
+    main: ./cmd
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+    binary: terraform-provider-growthbook
+
+archives:
+  - id: default
+    name_template: "terraform-provider-growthbook_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - "terraform-provider-growthbook*"
+
+release:
+  github:
+    owner: Flex-O-SAS
+    name: terraform-provider-growthbook

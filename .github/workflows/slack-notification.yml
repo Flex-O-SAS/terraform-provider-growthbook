@@ -1,0 +1,30 @@
+name: slack-notification
+
+on:
+  pull_request:
+    types: [reopened, edited, opened, closed, ready_for_review, synchronize, converted_to_draft]
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  contents: read
+  pull-requests: read
+  statuses: read
+  checks: read
+
+jobs:
+  notify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/create-github-app-token@v1
+        id: token
+        with:
+          app-id: ${{ vars.SAAS_NOTIFICATION_BOT_APP_ID }}
+          private-key: ${{ secrets.SAAS_NOTIFICATION_BOT_KEY }}
+          owner: ${{ github.repository_owner }}
+      - uses: Flex-O-SAS/slack-notification-action@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-org-token: ${{ steps.token.outputs.token}}
+          slack-token: ${{ secrets.SLACK_NOTIFICATION_BOT_TOKEN }}
+          slack-channel-id: ${{ vars.PLATFORM_TEAM_SLACK_CHANNEL_ID }}

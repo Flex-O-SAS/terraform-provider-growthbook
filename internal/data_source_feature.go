@@ -88,6 +88,5 @@ func dataSourceFeatureRead(ctx context.Context, d *schema.ResourceData, m interf
 	d.Set("tags", feature.Tags)
 	d.Set("environments", feature.Environments)
 	d.Set("prerequisites", feature.Prerequisites)
-
 	return nil
 }

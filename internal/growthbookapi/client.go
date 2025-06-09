@@ -2,40 +2,69 @@
 package growthbookapi
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
 	"net/http"
-	"net/url"
-	"strconv"
-	"strings"
-
-	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"time"
 )
 
 var (
 	// ErrNotFound is returned when a resource is not found (HTTP 404).
-	ErrNotFound    = errors.New("growthbookapi: resource not found")
-	//nolint:gochecknoglobals
-	createStatuses = []int{http.StatusOK, http.StatusCreated}
-	//nolint:gochecknoglobals
-	updateStatuses = []int{http.StatusOK}
-	//nolint:gochecknoglobals
-	readStatuses   = []int{http.StatusOK}
-	//nolint:gochecknoglobals
-	deleteStatuses = []int{http.StatusOK, http.StatusNoContent}
-	//nolint:gochecknoglobals
-	methodStatuses = map[string][]int{
-		"GET":    readStatuses,
-		"POST":   createStatuses,
-		"PUT":    updateStatuses,
-		"DELETE": deleteStatuses,
-		"PATCH":  updateStatuses,
-	}
+	ErrNotFound = errors.New("growthbookapi: resource not found")
 )
+
+// ClientAPI defines the interface for the GrowthBook API client.
+type ClientAPI interface {
+	// FindProjectByName retrieves a project by its name.
+	FindProjectByName(ctx context.Context, name string) (*Project, error)
+	// CreateProject creates a new project.
+	CreateProject(ctx context.Context, p *Project) (*Project, error)
+	// GetProject retrieves a project by its ID.
+	GetProject(ctx context.Context, id string) (*Project, error)
+	// UpdateProject updates an existing project by its ID.
+	UpdateProject(ctx context.Context, id string, p *Project) (*Project, error)
+	// DeleteProject deletes a project by its ID.
+	DeleteProject(ctx context.Context, id string) error
+	// FindEnvironmentByID retrieves an environment by its ID.
+	FindEnvironmentByID(ctx context.Context, id string) (*Environment, error)
+	// CreateEnvironment creates a new environment.
+	CreateEnvironment(ctx context.Context, e *Environment) (*Environment, error)
+	// UpdateEnvironment updates an existing environment by its ID.
+	UpdateEnvironment(ctx context.Context, id string, e *Environment) (*Environment, error)
+	// DeleteEnvironment deletes an environment by its ID.
+	DeleteEnvironment(ctx context.Context, id string) error
+	// CreateFeature creates a new feature.
+	CreateFeature(ctx context.Context, f *Feature) (*Feature, error)
+	// GetFeature retrieves a feature by its ID.
+	GetFeature(ctx context.Context, id string) (*Feature, error)
+	// UpdateFeature updates an existing feature by its ID.
+	UpdateFeature(ctx context.Context, id string, f *Feature) (*Feature, error)
+	// DeleteFeature deletes a feature by its ID.
+	DeleteFeature(ctx context.Context, id string) error
+	// FindFeatureByName retrieves a feature by its ID.
+	FindFeatureByName(ctx context.Context, id string) (*Feature, error)
+	// CreateSDKConnection creates a new SDK connection.
+	CreateSDKConnection(ctx context.Context, c *SDKConnection) (*SDKConnection, error)
+	// GetSDKConnection retrieves an SDK connection by its ID.
+	GetSDKConnection(ctx context.Context, id string) (*SDKConnection, error)
+	// UpdateSDKConnection updates an existing SDK connection by its ID.
+	UpdateSDKConnection(ctx context.Context, id string, c *SDKConnection) (*SDKConnection, error)
+	// DeleteSDKConnection deletes an SDK connection by its ID.
+	DeleteSDKConnection(ctx context.Context, id string) error
+	// FindSDKConnectionByName retrieves an SDK connection by its name.
+	FindSDKConnectionByName(ctx context.Context, name string) (*SDKConnection, error)
+}
+
+// BackoffConfig defines the configuration for retrying transient errors.
+type BackoffConfig struct {
+	MaxRetries      int
+	InitialInterval time.Duration
+	Multiplier      float64
+	MaxInterval     time.Duration
+}
+
+// Option is a function that configures a Client.
+type Option func(*Client)
 
 // Client is a GrowthBook API client that can be used to interact with the GrowthBook API.
 // It supports making HTTP requests to the API and includes options for customization.
@@ -46,10 +75,30 @@ type Client struct {
 	BaseURL    string
 	APIKey     string
 	HTTPClient *http.Client
+	Backoff    BackoffConfig
+	Limit      int
 }
 
-// Option is a function that configures a Client.
-type Option func(*Client)
+// NewClient creates a Client with optional configuration options.
+func NewClient(baseURL, apiKey string, opts ...Option) ClientAPI {
+	client := &Client{
+		BaseURL:    baseURL,
+		APIKey:     apiKey,
+		HTTPClient: http.DefaultClient,
+		Backoff: BackoffConfig{
+			MaxRetries:      3,
+			InitialInterval: 500 * time.Millisecond,
+			Multiplier:      2.0,
+			MaxInterval:     5 * time.Second,
+		},
+		Limit: 100,
+	}
+	for _, opt := range opts {
+		opt(client)
+	}
+
+	return client
+}
 
 // WithHTTPClient sets a custom http.Client.
 func WithHTTPClient(httpClient *http.Client) Option {
@@ -60,18 +109,18 @@ func WithHTTPClient(httpClient *http.Client) Option {
 	}
 }
 
-// NewClient creates a Client with optional configuration options.
-func NewClient(baseURL, apiKey string, opts ...Option) *Client {
-	client := &Client{
-		BaseURL:    baseURL,
-		APIKey:     apiKey,
-		HTTPClient: http.DefaultClient,
+// WithPageLimit sets the maximum number of items to return per page in paginated API responses.
+func WithPageLimit(limit int) Option {
+	return func(c *Client) {
+		c.Limit = limit
 	}
-	for _, opt := range opts {
-		opt(client)
-	}
+}
 
-	return client
+// WithBackoff sets a custom backoff configuration for transient error retries.
+func WithBackoff(cfg BackoffConfig) Option {
+	return func(c *Client) {
+		c.Backoff = cfg
+	}
 }
 
 func redactAPIKey(apiKey string) string {
@@ -80,215 +129,4 @@ func redactAPIKey(apiKey string) string {
 	}
 
 	return apiKey[:3] + "***REDACTED***" + apiKey[len(apiKey)-3:]
-}
-
-// doRequest executes an HTTP request to the GrowthBook API with the provided context.
-func (c *Client) doRequest(ctx context.Context, method, path string, body interface{}) (*http.Response, error) {
-	var buf io.Reader
-	var bodyLog string
-	if body != nil {
-		b, err := json.Marshal(body)
-		if err != nil {
-			return nil, err
-		}
-		buf = bytes.NewBuffer(b)
-		bodyLog = string(b)
-	}
-	url := c.BaseURL + path
-	redactedAPIKey := redactAPIKey(c.APIKey)
-	tflog.Debug(ctx,
-		"HTTP Request",
-		map[string]interface{}{
-			"method":        method,
-			"url":           url,
-			"authorization": "Bearer " + redactedAPIKey,
-			"body":          bodyLog,
-		},
-	)
-
-	req, err := http.NewRequestWithContext(ctx, method, url, buf)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+c.APIKey)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		tflog.Debug(ctx,
-			"HTTP Response Error",
-			map[string]interface{}{
-				"error":  err.Error(),
-				"method": method,
-				"url":    url,
-			},
-		)
-		return nil, err
-	}
-	defer func() {
-		_ = req.Body
-	}()
-	respBody, _ := io.ReadAll(resp.Body)
-	resp.Body = io.NopCloser(bytes.NewBuffer(respBody))
-	tflog.Debug(ctx,
-		"HTTP Response",
-		map[string]interface{}{
-			"method": method,
-			"url":    url,
-			"status": resp.StatusCode,
-			"body":   strings.TrimSpace(string(respBody)),
-		},
-	)
-
-	return resp, nil
-}
-
-func checkStatuses(method string, resp *http.Response) error {
-	expected, found := methodStatuses[method]
-	if !found {
-		return fmt.Errorf("unsupported method %s", method)
-	}
-	if resp == nil {
-		return errors.New("response is nil")
-	}
-
-	if resp.StatusCode == http.StatusNotFound {
-		return ErrNotFound
-	}
-	for _, code := range expected {
-		if resp.StatusCode == code {
-			return nil
-		}
-	}
-	return fmt.Errorf("unexpected status %d: %s", resp.StatusCode, http.StatusText(resp.StatusCode))
-}
-
-// fetchSingle performs an HTTP request and decodes the JSON response into out using generics.
-// If resultKey is not empty, it extracts the value from the response map using resultKey before decoding.
-func fetchSingle[T any](
-	ctx context.Context,
-	c *Client,
-	method string,
-	path string,
-	body interface{},
-	resultKey string,
-) (T, error) {
-	var zero T
-	resp, err := c.doRequest(ctx, method, path, body)
-	if err != nil {
-		return zero, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if err := checkStatuses(method, resp); err != nil {
-		return zero, err
-	}
-	var respMap map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&respMap); err != nil {
-		return zero, err
-	}
-	val, ok := respMap[resultKey]
-	if !ok {
-		return zero, fmt.Errorf("response missing '%s' key", resultKey)
-	}
-	valBytes, err := json.Marshal(val)
-	if err != nil {
-		return zero, err
-	}
-	var out T
-	if err := json.Unmarshal(valBytes, &out); err != nil {
-		return zero, err
-	}
-	return out, nil
-}
-
-// fetchPage performs a single paginated API request and decodes the response.
-func fetchPage[T any](
-	ctx context.Context,
-	c *Client,
-	method string,
-	urlStr string,
-	body interface{},
-	resultKey string,
-) ([]T, bool, int, error) {
-	resp, err := c.doRequest(ctx, method, urlStr, body)
-	if err != nil {
-		return nil, false, 0, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if err := checkStatuses(method, resp); err != nil {
-		return nil, false, 0, err
-	}
-	var page map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {
-		return nil, false, 0, err
-	}
-	itemsRaw, ok := page[resultKey]
-	if !ok {
-		return nil, false, 0, fmt.Errorf("response missing '%s' key", resultKey)
-	}
-	itemsBytes, err := json.Marshal(itemsRaw)
-	if err != nil {
-		return nil, false, 0, err
-	}
-	var items []T
-	if err := json.Unmarshal(itemsBytes, &items); err != nil {
-		return nil, false, 0, err
-	}
-	hasMore, _ := page["hasMore"].(bool)
-	nextOffset, _ := page["nextOffset"].(float64)
-	return items, hasMore, int(nextOffset), nil
-}
-
-// fetchAll performs repeated HTTP requests to fetch all pages of a paginated list
-// endpoint and decodes the results into a single slice.
-func fetchAll[T any](
-	ctx context.Context,
-	c *Client,
-	method string,
-	path string,
-	body interface{},
-	resultKey string,
-) ([]T, error) {
-	var allItems []T
-	offset := 0
-	for {
-		parsedURL, err := url.Parse(path)
-		if err != nil {
-			return nil, err
-		}
-		q := parsedURL.Query()
-		q.Set("limit", strconv.Itoa(100))
-		if offset > 0 {
-			q.Set("offset", strconv.Itoa(offset))
-		}
-		parsedURL.RawQuery = q.Encode()
-		urlStr := parsedURL.String()
-		items, hasMore, nextOffset, err := fetchPage[T](ctx, c, method, urlStr, body, resultKey)
-		if err != nil {
-			return nil, err
-		}
-		allItems = append(allItems, items...)
-		if !hasMore {
-			break
-		}
-		offset = nextOffset
-	}
-	return allItems, nil
-}
-
-// remove performs a DELETE request and checks for expected status codes.
-func (c *Client) remove(ctx context.Context, path string) error {
-	resp, err := c.doRequest(ctx, "DELETE", path, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = resp.Body.Close() }()
-	for _, code := range deleteStatuses {
-		if resp.StatusCode == code {
-			return nil
-		}
-	}
-	b, _ := io.ReadAll(resp.Body)
-	return fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(b))
 }

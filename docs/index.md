@@ -17,6 +17,10 @@ provider "growthbook" {
   api_url              = "https://api.growthbook.io/api/v1" # optional, override for self-hosted
   http_timeout         = 60 # optional, HTTP timeout in seconds (default: 60)
   insecure_skip_verify = false # optional, skip SSL verification (not recommended)
+  retry_max_attempts   = 5    # optional, max retry attempts for transient API errors (default: 5)
+  retry_min_backoff_ms = 500  # optional, min backoff (ms) between retries (default: 500)
+  retry_max_backoff_ms = 5000 # optional, max backoff (ms) between retries (default: 5000)
+  query_limit          = 100  # optional, max items per page for paginated API requests (default: 100)
 }
 ```
 
@@ -31,6 +35,10 @@ provider "growthbook" {
 - `api_url`: (String)  GrowthBook API base URL. Defaults to `https://api.growthbook.io/api/v1`.
 - `http_timeout`: (Integer) Timeout (in seconds) for HTTP requests. Defaults to `60`.
 - `insecure_skip_verify`: (Boolean) If true, disables SSL certificate verification (not recommended for prod). Defaults to `false`.
+- `retry_max_attempts`: (Integer) Maximum number of retry attempts for transient API errors. Defaults to `5`.
+- `retry_min_backoff_ms`: (Integer) Minimum backoff (in milliseconds) between retries. Defaults to `500`.
+- `retry_max_backoff_ms`: (Integer) Maximum backoff (in milliseconds) between retries. Defaults to `5000`.
+- `query_limit`: (Integer) Maximum number of items to fetch per page for paginated API requests. Defaults to `100`.
 
 
 ## Example usage

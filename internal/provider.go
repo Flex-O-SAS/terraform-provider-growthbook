@@ -45,6 +45,30 @@ func Provider() *schema.Provider {
 				Description: "If true, disables SSL certificate verification for GrowthBook API requests " +
 					"(not recommended for production).",
 			},
+			"retry_max_attempts": {
+				Type:        schema.TypeInt,
+				Optional:    true,
+				Default:     5,
+				Description: "Maximum number of retry attempts for transient API errors.",
+			},
+			"retry_min_backoff_ms": {
+				Type:        schema.TypeInt,
+				Optional:    true,
+				Default:     500,
+				Description: "Minimum backoff (in milliseconds) between retries.",
+			},
+			"retry_max_backoff_ms": {
+				Type:        schema.TypeInt,
+				Optional:    true,
+				Default:     5000,
+				Description: "Maximum backoff (in milliseconds) between retries.",
+			},
+			"query_limit": {
+				Type:        schema.TypeInt,
+				Optional:    true,
+				Default:     100,
+				Description: "Maximum number of items to fetch per page for paginated API requests.",
+			},
 		},
 		ResourcesMap: map[string]*schema.Resource{
 			"growthbook_project":        resourceProject(),
@@ -78,6 +102,11 @@ func configureProvider(_ context.Context, d *schema.ResourceData) (interface{}, 
 	timeout := d.Get("http_timeout").(int)
 	insecure := d.Get("insecure_skip_verify").(bool)
 
+	retryMaxAttempts := d.Get("retry_max_attempts").(int)
+	retryMinBackoff := d.Get("retry_min_backoff_ms").(int)
+	retryMaxBackoff := d.Get("retry_max_backoff_ms").(int)
+	queryLimit := d.Get("query_limit").(int)
+
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: insecure},
 	}
@@ -90,6 +119,13 @@ func configureProvider(_ context.Context, d *schema.ResourceData) (interface{}, 
 		baseURL,
 		apiKey,
 		growthbookapi.WithHTTPClient(httpClient),
+		growthbookapi.WithBackoff(growthbookapi.BackoffConfig{
+			MaxRetries:      retryMaxAttempts,
+			InitialInterval: time.Duration(retryMinBackoff) * time.Millisecond,
+			Multiplier:      2.0,
+			MaxInterval:     time.Duration(retryMaxBackoff) * time.Millisecond,
+		}),
+		growthbookapi.WithPageLimit(queryLimit),
 	)
 
 	return client, nil

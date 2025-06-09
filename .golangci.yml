@@ -45,7 +45,6 @@ linters:
     - importas
     - inamedparam
     - ineffassign
-    - interfacebloat
     - intrange
     - lll
     - loggercheck

@@ -8,7 +8,7 @@ import (
 
 // CreateProject creates a new project in GrowthBook.
 func (c *Client) CreateProject(ctx context.Context, p *Project) (*Project, error) {
-	out, err := fetchSingle[Project](ctx, c, "POST", "/projects", p, "project")
+	out, err := fetcher[Project](c, "POST", "/projects").One(ctx, p, "project")
 	if err != nil {
 		return nil, err
 	}
@@ -17,7 +17,7 @@ func (c *Client) CreateProject(ctx context.Context, p *Project) (*Project, error
 
 // GetProject fetches a project by its ID.
 func (c *Client) GetProject(ctx context.Context, id string) (*Project, error) {
-	out, err := fetchSingle[Project](ctx, c, "GET", "/projects/"+id, nil, "project")
+	out, err := fetcher[Project](c, "GET", "/projects/"+id).One(ctx, nil, "project")
 	if err != nil {
 		return nil, err
 	}
@@ -26,7 +26,7 @@ func (c *Client) GetProject(ctx context.Context, id string) (*Project, error) {
 
 // UpdateProject updates an existing project by its ID.
 func (c *Client) UpdateProject(ctx context.Context, id string, p *Project) (*Project, error) {
-	out, err := fetchSingle[Project](ctx, c, "PUT", "/projects/"+id, p, "project")
+	out, err := fetcher[Project](c, "PUT", "/projects/"+id).One(ctx, p, "project")
 	if err != nil {
 		return nil, err
 	}
@@ -35,12 +35,12 @@ func (c *Client) UpdateProject(ctx context.Context, id string, p *Project) (*Pro
 
 // DeleteProject deletes a project by its ID.
 func (c *Client) DeleteProject(ctx context.Context, id string) error {
-	return c.remove(ctx, "/projects/"+id)
+	return c.delete(ctx, "/projects/"+id)
 }
 
 // FindProjectByName searches for a project by its name and returns the first match, handling pagination.
 func (c *Client) FindProjectByName(ctx context.Context, name string) (*Project, error) {
-	projects, err := fetchAll[Project](ctx, c, "GET", "/projects", nil, "projects")
+	projects, err := fetcher[Project](c, "GET", "/projects").All(ctx, nil, "projects")
 	if err != nil {
 		return nil, err
 	}

@@ -65,6 +65,5 @@ func dataSourceProjectRead(ctx context.Context, d *schema.ResourceData, m interf
 	d.Set("stats_engine", project.Settings.StatsEngine)
 	d.Set("date_created", project.DateCreated)
 	d.Set("date_updated", project.DateUpdated)
-
 	return nil
 }

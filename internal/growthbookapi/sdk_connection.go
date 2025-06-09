@@ -8,7 +8,7 @@ import (
 
 // CreateSDKConnection creates a new SDK connection in GrowthBook.
 func (c *Client) CreateSDKConnection(ctx context.Context, s *SDKConnection) (*SDKConnection, error) {
-	out, err := fetchSingle[SDKConnection](ctx, c, "POST", "/sdk-connections", s, "sdkConnection")
+	out, err := fetcher[SDKConnection](c, "POST", "/sdk-connections").One(ctx, s, "sdkConnection")
 	if err != nil {
 		return nil, err
 	}
@@ -20,7 +20,7 @@ func (c *Client) CreateSDKConnection(ctx context.Context, s *SDKConnection) (*SD
 
 // GetSDKConnection fetches an SDK connection by its ID.
 func (c *Client) GetSDKConnection(ctx context.Context, id string) (*SDKConnection, error) {
-	out, err := fetchSingle[SDKConnection](ctx, c, "GET", "/sdk-connections/"+id, nil, "sdkConnection")
+	out, err := fetcher[SDKConnection](c, "GET", "/sdk-connections/"+id).One(ctx, nil, "sdkConnection")
 	if err != nil {
 		return nil, err
 	}
@@ -32,7 +32,7 @@ func (c *Client) GetSDKConnection(ctx context.Context, id string) (*SDKConnectio
 
 // UpdateSDKConnection updates an existing SDK connection by its ID.
 func (c *Client) UpdateSDKConnection(ctx context.Context, id string, s *SDKConnection) (*SDKConnection, error) {
-	out, err := fetchSingle[SDKConnection](ctx, c, "PUT", "/sdk-connections/"+id, s, "sdkConnection")
+	out, err := fetcher[SDKConnection](c, "PUT", "/sdk-connections/"+id).One(ctx, s, "sdkConnection")
 	if err != nil {
 		return nil, err
 	}
@@ -44,12 +44,12 @@ func (c *Client) UpdateSDKConnection(ctx context.Context, id string, s *SDKConne
 
 // DeleteSDKConnection deletes an SDK connection by its ID.
 func (c *Client) DeleteSDKConnection(ctx context.Context, id string) error {
-	return c.remove(ctx, "/sdk-connections/"+id)
+	return c.delete(ctx, "/sdk-connections/"+id)
 }
 
 // FindSDKConnectionByName searches for an SDK connection by its name and returns the first match, handling pagination.
 func (c *Client) FindSDKConnectionByName(ctx context.Context, name string) (*SDKConnection, error) {
-	sdks, err := fetchAll[SDKConnection](ctx, c, "GET", "/sdk-connections", nil, "connections")
+	sdks, err := fetcher[SDKConnection](c, "GET", "/sdk-connections").All(ctx, nil, "connections")
 	if err != nil {
 		return nil, err
 	}
@@ -62,9 +62,4 @@ func (c *Client) FindSDKConnectionByName(ctx context.Context, name string) (*SDK
 		}
 	}
 	return nil, ErrNotFound
-}
-
-// FindSDKConnectionByID fetches an SDK connection by its ID.
-func (c *Client) FindSDKConnectionByID(ctx context.Context, id string) (*SDKConnection, error) {
-	return c.GetSDKConnection(ctx, id)
 }

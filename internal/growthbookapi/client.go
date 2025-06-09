@@ -9,13 +9,28 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-// ErrNotFound is returned when a resource is not found (HTTP 404).
-var ErrNotFound = errors.New("growthbookapi: resource not found")
+var (
+	// ErrNotFound is returned when a resource is not found (HTTP 404).
+	ErrNotFound    = errors.New("growthbookapi: resource not found")
+	createStatuses = []int{http.StatusOK, http.StatusCreated}
+	updateStatuses = []int{http.StatusOK}
+	readStatuses   = []int{http.StatusOK}
+	deleteStatuses = []int{http.StatusOK, http.StatusNoContent}
+	methodStatuses = map[string][]int{
+		"GET":    readStatuses,
+		"POST":   createStatuses,
+		"PUT":    updateStatuses,
+		"DELETE": deleteStatuses,
+		"PATCH":  updateStatuses,
+	}
+)
 
 // Client is a GrowthBook API client that can be used to interact with the GrowthBook API.
 // It supports making HTTP requests to the API and includes options for customization.
@@ -123,14 +138,35 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 	return resp, nil
 }
 
-// doRequestAndDecode performs an HTTP request and decodes the JSON response into out using generics.
-func doRequestAndDecode[T any](
+func checkStatuses(method string, resp *http.Response) error {
+	expected, found := methodStatuses[method]
+	if !found {
+		return fmt.Errorf("unsupported method %s", method)
+	}
+	if resp == nil {
+		return fmt.Errorf("response is nil")
+	}
+
+	if resp.StatusCode == http.StatusNotFound {
+		return ErrNotFound
+	}
+	for _, code := range expected {
+		if resp.StatusCode == code {
+			return nil
+		}
+	}
+	return fmt.Errorf("unexpected status %d: %s", resp.StatusCode, http.StatusText(resp.StatusCode))
+}
+
+// fetchSingle performs an HTTP request and decodes the JSON response into out using generics.
+// If resultKey is not empty, it extracts the value from the response map using resultKey before decoding.
+func fetchSingle[T any](
 	ctx context.Context,
 	c *Client,
 	method string,
 	path string,
 	body interface{},
-	expectedStatus ...int,
+	resultKey string,
 ) (T, error) {
 	var zero T
 	resp, err := c.doRequest(ctx, method, path, body)
@@ -139,32 +175,111 @@ func doRequestAndDecode[T any](
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	ok := false
-	for _, code := range expectedStatus {
-		if resp.StatusCode == code {
-			ok = true
-			break
-		}
+	if err := checkStatuses(method, resp); err != nil {
+		return zero, err
 	}
+	var respMap map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&respMap); err != nil {
+		return zero, err
+	}
+	val, ok := respMap[resultKey]
 	if !ok {
-		b, _ := io.ReadAll(resp.Body)
-		return zero, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(b))
+		return zero, fmt.Errorf("response missing '%s' key", resultKey)
+	}
+	valBytes, err := json.Marshal(val)
+	if err != nil {
+		return zero, err
 	}
 	var out T
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+	if err := json.Unmarshal(valBytes, &out); err != nil {
 		return zero, err
 	}
 	return out, nil
 }
 
-// doDeleteRequest performs a DELETE request and checks for expected status codes.
-func (c *Client) doDeleteRequest(ctx context.Context, path string, expectedStatus ...int) error {
+// fetchPage performs a single paginated API request and decodes the response.
+func fetchPage[T any](
+	ctx context.Context,
+	c *Client,
+	method string,
+	urlStr string,
+	body interface{},
+	resultKey string,
+) ([]T, bool, int, error) {
+	resp, err := c.doRequest(ctx, method, urlStr, body)
+	if err != nil {
+		return nil, false, 0, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if err := checkStatuses(method, resp); err != nil {
+		return nil, false, 0, err
+	}
+	var page map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {
+		return nil, false, 0, err
+	}
+	itemsRaw, ok := page[resultKey]
+	if !ok {
+		return nil, false, 0, fmt.Errorf("response missing '%s' key", resultKey)
+	}
+	itemsBytes, err := json.Marshal(itemsRaw)
+	if err != nil {
+		return nil, false, 0, err
+	}
+	var items []T
+	if err := json.Unmarshal(itemsBytes, &items); err != nil {
+		return nil, false, 0, err
+	}
+	hasMore, _ := page["hasMore"].(bool)
+	nextOffset, _ := page["nextOffset"].(float64)
+	return items, hasMore, int(nextOffset), nil
+}
+
+// fetchAll performs repeated HTTP requests to fetch all pages of a paginated list
+// endpoint and decodes the results into a single slice.
+func fetchAll[T any](
+	ctx context.Context,
+	c *Client,
+	method string,
+	path string,
+	body interface{},
+	resultKey string,
+) ([]T, error) {
+	var allItems []T
+	offset := 0
+	for {
+		parsedURL, err := url.Parse(path)
+		if err != nil {
+			return nil, err
+		}
+		q := parsedURL.Query()
+		q.Set("limit", strconv.Itoa(100))
+		if offset > 0 {
+			q.Set("offset", strconv.Itoa(offset))
+		}
+		parsedURL.RawQuery = q.Encode()
+		urlStr := parsedURL.String()
+		items, hasMore, nextOffset, err := fetchPage[T](ctx, c, method, urlStr, body, resultKey)
+		if err != nil {
+			return nil, err
+		}
+		allItems = append(allItems, items...)
+		if !hasMore {
+			break
+		}
+		offset = nextOffset
+	}
+	return allItems, nil
+}
+
+// remove performs a DELETE request and checks for expected status codes.
+func (c *Client) remove(ctx context.Context, path string) error {
 	resp, err := c.doRequest(ctx, "DELETE", path, nil)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = resp.Body.Close() }()
-	for _, code := range expectedStatus {
+	for _, code := range deleteStatuses {
 		if resp.StatusCode == code {
 			return nil
 		}

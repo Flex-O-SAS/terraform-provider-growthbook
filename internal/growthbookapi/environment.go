@@ -14,7 +14,7 @@ type environmentListResponse struct {
 
 // CreateEnvironment creates a new environment in GrowthBook.
 func (c *Client) CreateEnvironment(ctx context.Context, e *Environment) (*Environment, error) {
-	out, err := doRequestAndDecode[environmentResponse](
+	out, err := fetchOne[environmentResponse](
 		ctx,
 		c,
 		"POST",
@@ -31,7 +31,7 @@ func (c *Client) CreateEnvironment(ctx context.Context, e *Environment) (*Enviro
 
 // UpdateEnvironment updates an existing environment by its ID.
 func (c *Client) UpdateEnvironment(ctx context.Context, id string, e *Environment) (*Environment, error) {
-	out, err := doRequestAndDecode[environmentResponse](ctx, c, "PUT", "/environments/"+id, e, http.StatusOK)
+	out, err := fetchOne[environmentResponse](ctx, c, "PUT", "/environments/"+id, e, http.StatusOK)
 	if err != nil {
 		return nil, err
 	}
@@ -40,12 +40,12 @@ func (c *Client) UpdateEnvironment(ctx context.Context, id string, e *Environmen
 
 // DeleteEnvironment deletes an environment by its ID.
 func (c *Client) DeleteEnvironment(ctx context.Context, id string) error {
-	return c.doDeleteRequest(ctx, "/environments/"+id, http.StatusOK, http.StatusNoContent)
+	return c.remove(ctx, "/environments/"+id, http.StatusOK, http.StatusNoContent)
 }
 
 // FindEnvironmentByID fetches an environment by its ID by listing all and filtering.
 func (c *Client) FindEnvironmentByID(ctx context.Context, id string) (*Environment, error) {
-	envs, err := doRequestAndDecode[environmentListResponse](ctx, c, "GET", "/environments", nil, http.StatusOK)
+	envs, err := fetchOne[environmentListResponse](ctx, c, "GET", "/environments", nil, http.StatusOK)
 	if err != nil {
 		return nil, err
 	}

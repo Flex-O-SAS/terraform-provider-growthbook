@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -123,8 +125,8 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 	return resp, nil
 }
 
-// doRequestAndDecode performs an HTTP request and decodes the JSON response into out using generics.
-func doRequestAndDecode[T any](
+// fetchOne performs an HTTP request and decodes the JSON response into out using generics.
+func fetchOne[T any](
 	ctx context.Context,
 	c *Client,
 	method string,
@@ -157,8 +159,92 @@ func doRequestAndDecode[T any](
 	return out, nil
 }
 
-// doDeleteRequest performs a DELETE request and checks for expected status codes.
-func (c *Client) doDeleteRequest(ctx context.Context, path string, expectedStatus ...int) error {
+// fetchPage performs a single paginated API request and decodes the response.
+func fetchPage[T any](
+	ctx context.Context,
+	c *Client, method string,
+	urlStr string,
+	body interface{},
+	resultKey string,
+	expectedStatus ...int,
+) ([]T, bool, int, error) {
+	resp, err := c.doRequest(ctx, method, urlStr, body)
+	if err != nil {
+		return nil, false, 0, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	ok := false
+	for _, code := range expectedStatus {
+		if resp.StatusCode == code {
+			ok = true
+			break
+		}
+	}
+	if !ok {
+		b, _ := io.ReadAll(resp.Body)
+		return nil, false, 0, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(b))
+	}
+	var page map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {
+		return nil, false, 0, err
+	}
+	itemsRaw, ok := page[resultKey]
+	if !ok {
+		return nil, false, 0, fmt.Errorf("response missing '%s' key", resultKey)
+	}
+	itemsBytes, err := json.Marshal(itemsRaw)
+	if err != nil {
+		return nil, false, 0, err
+	}
+	var items []T
+	if err := json.Unmarshal(itemsBytes, &items); err != nil {
+		return nil, false, 0, err
+	}
+	hasMore, _ := page["hasMore"].(bool)
+	nextOffset, _ := page["nextOffset"].(float64)
+	return items, hasMore, int(nextOffset), nil
+}
+
+// fetchAllPages performs repeated HTTP requests to fetch all pages of a paginated list
+// endpoint and decodes the results into a single slice.
+func fetchAllPages[T any](
+	ctx context.Context,
+	c *Client,
+	method string,
+	path string,
+	body interface{},
+	resultKey string,
+	expectedStatus ...int,
+) ([]T, error) {
+	var allItems []T
+	offset := 0
+	for {
+		parsedURL, err := url.Parse(path)
+		if err != nil {
+			return nil, err
+		}
+		q := parsedURL.Query()
+		q.Set("limit", strconv.Itoa(100))
+		if offset > 0 {
+			q.Set("offset", strconv.Itoa(offset))
+		}
+		parsedURL.RawQuery = q.Encode()
+		urlStr := parsedURL.String()
+		items, hasMore, nextOffset, err := fetchPage[T](ctx, c, method, urlStr, body, resultKey, expectedStatus...)
+		if err != nil {
+			return nil, err
+		}
+		allItems = append(allItems, items...)
+		if !hasMore {
+			break
+		}
+		offset = nextOffset
+	}
+	return allItems, nil
+}
+
+// remove performs a DELETE request and checks for expected status codes.
+func (c *Client) remove(ctx context.Context, path string, expectedStatus ...int) error {
 	resp, err := c.doRequest(ctx, "DELETE", path, nil)
 	if err != nil {
 		return err

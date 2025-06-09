@@ -9,10 +9,6 @@ type featureResponse struct {
 	Feature Feature `json:"feature"`
 }
 
-type featureListResponse struct {
-	Features []Feature `json:"features"`
-}
-
 // CreateFeature creates a new feature in GrowthBook.
 func (c *Client) CreateFeature(ctx context.Context, f *Feature) (*Feature, error) {
 	if f.Environments == nil {
@@ -24,7 +20,7 @@ func (c *Client) CreateFeature(ctx context.Context, f *Feature) (*Feature, error
 	if f.Prerequisites == nil {
 		f.Prerequisites = []string{}
 	}
-	out, err := doRequestAndDecode[featureResponse](ctx, c, "POST", "/features", f, http.StatusOK, http.StatusCreated)
+	out, err := fetchOne[featureResponse](ctx, c, "POST", "/features", f, http.StatusOK, http.StatusCreated)
 	if err != nil {
 		return nil, err
 	}
@@ -33,7 +29,7 @@ func (c *Client) CreateFeature(ctx context.Context, f *Feature) (*Feature, error
 
 // GetFeature fetches a feature by its ID.
 func (c *Client) GetFeature(ctx context.Context, id string) (*Feature, error) {
-	out, err := doRequestAndDecode[featureResponse](ctx, c, "GET", "/features/"+id, nil, http.StatusOK)
+	out, err := fetchOne[featureResponse](ctx, c, "GET", "/features/"+id, nil, http.StatusOK)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +47,7 @@ func (c *Client) UpdateFeature(ctx context.Context, id string, f *Feature) (*Fea
 	if f.Prerequisites == nil {
 		f.Prerequisites = []string{}
 	}
-	out, err := doRequestAndDecode[featureResponse](ctx, c, "POST", "/features/"+id, f, http.StatusOK)
+	out, err := fetchOne[featureResponse](ctx, c, "POST", "/features/"+id, f, http.StatusOK)
 	if err != nil {
 		return nil, err
 	}
@@ -60,16 +56,16 @@ func (c *Client) UpdateFeature(ctx context.Context, id string, f *Feature) (*Fea
 
 // DeleteFeature removes a feature by its ID.
 func (c *Client) DeleteFeature(ctx context.Context, id string) error {
-	return c.doDeleteRequest(ctx, "/features/"+id, http.StatusOK, http.StatusNoContent)
+	return c.remove(ctx, "/features/"+id, http.StatusOK, http.StatusNoContent)
 }
 
-// FindFeatureByName searches for a feature by its ID and returns the first match.
+// FindFeatureByName searches for a feature by its ID and returns the first match, handling pagination.
 func (c *Client) FindFeatureByName(ctx context.Context, id string) (*Feature, error) {
-	feats, err := doRequestAndDecode[featureListResponse](ctx, c, "GET", "/features", nil, http.StatusOK)
+	features, err := fetchAllPages[Feature](ctx, c, "GET", "/features", nil, "features", http.StatusOK)
 	if err != nil {
 		return nil, err
 	}
-	for _, f := range feats.Features {
+	for _, f := range features {
 		if f.ID == id {
 			return &f, nil
 		}

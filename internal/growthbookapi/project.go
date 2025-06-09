@@ -10,13 +10,10 @@ import (
 type projectResponse struct {
 	Project Project `json:"project"`
 }
-type projectListResponse struct {
-	Projects []Project `json:"projects"`
-}
 
 // CreateProject creates a new project in GrowthBook.
 func (c *Client) CreateProject(ctx context.Context, p *Project) (*Project, error) {
-	out, err := doRequestAndDecode[projectResponse](ctx, c, "POST", "/projects", p, http.StatusOK, http.StatusCreated)
+	out, err := fetchOne[projectResponse](ctx, c, "POST", "/projects", p, http.StatusOK, http.StatusCreated)
 	if err != nil {
 		return nil, err
 	}
@@ -25,7 +22,7 @@ func (c *Client) CreateProject(ctx context.Context, p *Project) (*Project, error
 
 // GetProject fetches a project by its ID.
 func (c *Client) GetProject(ctx context.Context, id string) (*Project, error) {
-	out, err := doRequestAndDecode[projectResponse](ctx, c, "GET", "/projects/"+id, nil, http.StatusOK)
+	out, err := fetchOne[projectResponse](ctx, c, "GET", "/projects/"+id, nil, http.StatusOK)
 	if err != nil {
 		return nil, err
 	}
@@ -34,7 +31,7 @@ func (c *Client) GetProject(ctx context.Context, id string) (*Project, error) {
 
 // UpdateProject updates an existing project by its ID.
 func (c *Client) UpdateProject(ctx context.Context, id string, p *Project) (*Project, error) {
-	out, err := doRequestAndDecode[projectResponse](ctx, c, "PUT", "/projects/"+id, p, http.StatusOK)
+	out, err := fetchOne[projectResponse](ctx, c, "PUT", "/projects/"+id, p, http.StatusOK)
 	if err != nil {
 		return nil, err
 	}
@@ -43,16 +40,16 @@ func (c *Client) UpdateProject(ctx context.Context, id string, p *Project) (*Pro
 
 // DeleteProject deletes a project by its ID.
 func (c *Client) DeleteProject(ctx context.Context, id string) error {
-	return c.doDeleteRequest(ctx, "/projects/"+id, http.StatusOK, http.StatusNoContent)
+	return c.remove(ctx, "/projects/"+id, http.StatusOK, http.StatusNoContent)
 }
 
-// FindProjectByName searches for a project by its name and returns the first match.
+// FindProjectByName searches for a project by its name and returns the first match, handling pagination.
 func (c *Client) FindProjectByName(ctx context.Context, name string) (*Project, error) {
-	projs, err := doRequestAndDecode[projectListResponse](ctx, c, "GET", "/projects", nil, http.StatusOK)
+	projects, err := fetchAllPages[Project](ctx, c, "GET", "/projects", nil, "projects", http.StatusOK)
 	if err != nil {
 		return nil, err
 	}
-	for _, p := range projs.Projects {
+	for _, p := range projects {
 		if p.Name == name {
 			return &p, nil
 		}

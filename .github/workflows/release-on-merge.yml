@@ -1,4 +1,4 @@
-name: tag-on-merge
+name: release-on-merge
 
 on:
   pull_request:
@@ -8,18 +8,18 @@ on:
       - main
 
 jobs:
-  tag:
+  release:
     if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main'
     runs-on: ubuntu-24.04
+    name: release-on-merge
     permissions:
       contents: write
       pull-requests: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Fetch all tags
-        run: git fetch --tags
+        with:
+          fetch-depth: 0
 
       - name: Bump version and create tag
         id: tag_version
@@ -45,7 +45,7 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: prNumber,
-                body: `:tada: This PR has been released as **${newTag}**`
+                body: `:tada: New git tag **${newTag}**`
               });
             }
         env:
@@ -56,6 +56,13 @@ jobs:
         with:
           go-version: '1.22'
 
+      - name: Import GPG key
+        uses: crazy-max/ghaction-import-gpg@v6
+        id: import_gpg
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.GPG_PASSPHRASE }}
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
@@ -64,6 +71,7 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
 
       - name: Comment on PR with new release
         uses: actions/github-script@v7

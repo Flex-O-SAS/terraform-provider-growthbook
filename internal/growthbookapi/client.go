@@ -19,10 +19,15 @@ import (
 var (
 	// ErrNotFound is returned when a resource is not found (HTTP 404).
 	ErrNotFound    = errors.New("growthbookapi: resource not found")
+	//nolint:gochecknoglobals
 	createStatuses = []int{http.StatusOK, http.StatusCreated}
+	//nolint:gochecknoglobals
 	updateStatuses = []int{http.StatusOK}
+	//nolint:gochecknoglobals
 	readStatuses   = []int{http.StatusOK}
+	//nolint:gochecknoglobals
 	deleteStatuses = []int{http.StatusOK, http.StatusNoContent}
+	//nolint:gochecknoglobals
 	methodStatuses = map[string][]int{
 		"GET":    readStatuses,
 		"POST":   createStatuses,
@@ -144,7 +149,7 @@ func checkStatuses(method string, resp *http.Response) error {
 		return fmt.Errorf("unsupported method %s", method)
 	}
 	if resp == nil {
-		return fmt.Errorf("response is nil")
+		return errors.New("response is nil")
 	}
 
 	if resp.StatusCode == http.StatusNotFound {

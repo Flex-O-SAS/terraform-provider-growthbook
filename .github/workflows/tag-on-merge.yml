@@ -51,3 +51,35 @@ jobs:
         env:
           NEW_TAG: ${{ steps.tag_version.outputs.new_tag }}
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Comment on PR with new release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const newTag = process.env.NEW_TAG || '${{ steps.tag_version.outputs.new_tag }}';
+            const url = process.env.RELEASE_URL || '#';
+            if (prNumber && newTag) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: `:tada: New github release [${newTag}](${url})`
+              });
+            }
+        env:
+          NEW_TAG: ${{ steps.tag_version.outputs.new_tag }}
+          RELEASE_URL: ${{ github.repository }}/releases/tag/${{ steps.tag_version.outputs.new_tag }}

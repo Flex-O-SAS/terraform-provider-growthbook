@@ -113,9 +113,9 @@ func resourceFeatureUpdate(ctx context.Context, d *schema.ResourceData, m interf
 	id := d.Id()
 	feature := &growthbookapi.Feature{
 		Description:  d.Get("description").(string),
-		Owner:        d.Get("owner").(string),
+		Archived:     d.Get("archived").(bool),
 		Project:      d.Get("project").(string),
-		ValueType:    d.Get("value_type").(string),
+		Owner:        d.Get("owner").(string),
 		DefaultValue: d.Get("default_value").(string),
 		Tags:         expandStringList(d.Get("tags")),
 	}

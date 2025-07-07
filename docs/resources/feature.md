@@ -12,7 +12,7 @@ Manages a GrowthBook feature flag.
 
 ```hcl
 resource "growthbook_feature" "example" {
-  id            = "my-feature"
+  name          = "my-feature"
   description   = "A feature flag"
   owner         = "owner@example.com"
   project       = growthbook_project.example.id
@@ -24,7 +24,7 @@ resource "growthbook_feature" "example" {
 
 ## Argument Reference
 
-- `id` (String, Required) – The unique ID of the feature.
+- `name` (String, Required) – The unique ID of the feature.
 - `description` (String, Optional) – The description of the feature.
 - `owner` (String, Optional) – The owner of the feature.
 - `project` (String, Required) – The project ID this feature belongs to.

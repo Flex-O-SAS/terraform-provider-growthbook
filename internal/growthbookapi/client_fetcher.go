@@ -3,6 +3,8 @@ package growthbookapi
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/url"
 	"strconv"
 
@@ -40,7 +42,13 @@ func (h *handler[T]) One(ctx context.Context, body any, resultKey string) (T, er
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	if err := checkStatuses(h.method, resp); err != nil {
+	// Read response body once for both error checking and parsing
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return zero, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if err := checkStatuses(h.method, resp.StatusCode, respBody); err != nil {
 		tflog.Error(ctx, "Status check failed in fetchSingle", map[string]any{
 			"error":  err.Error(),
 			"status": resp.StatusCode,
@@ -50,7 +58,7 @@ func (h *handler[T]) One(ctx context.Context, body any, resultKey string) (T, er
 		return zero, err
 	}
 	var respMap map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&respMap); err != nil {
+	if err := json.Unmarshal(respBody, &respMap); err != nil {
 		tflog.Error(ctx, "JSON decode failed in fetchSingle", map[string]any{
 			"error":  err.Error(),
 			"method": h.method,
@@ -71,12 +79,16 @@ func (h *handler[T]) page(
 	if err != nil {
 		return nil, false, 0, err
 	}
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, false, 0, err
+	}
 	defer func() { _ = resp.Body.Close() }()
-	if err := checkStatuses(h.method, resp); err != nil {
+	if err := checkStatuses(h.method, resp.StatusCode, respBody); err != nil {
 		return nil, false, 0, err
 	}
 	var page map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {
+	if err := json.Unmarshal(respBody, &page); err != nil {
 		return nil, false, 0, err
 	}
 	items, err := decodeResultKey[[]T](page, resultKey)

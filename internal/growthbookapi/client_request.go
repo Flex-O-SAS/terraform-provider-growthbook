@@ -16,6 +16,13 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
+// APIError represents an error response from the GrowthBook API.
+type APIError struct {
+	StatusCode int    `json:"-"`
+	Message    string `json:"message"`
+	HTTPStatus string `json:"-"`
+}
+
 var (
 	//nolint:gochecknoglobals
 	createStatuses = []int{http.StatusOK, http.StatusCreated}
@@ -35,24 +42,48 @@ var (
 	}
 )
 
-func checkStatuses(method string, resp *http.Response) error {
+func (e APIError) Error() string {
+	msg := e.Message
+	if msg == "" {
+		msg = e.HTTPStatus
+	}
+	return fmt.Sprintf("unexpected status: %d %s", e.StatusCode, msg)
+}
+
+func checkStatuses(method string, statusCode int, body []byte) error {
 	expected, found := methodStatuses[method]
 	if !found {
 		return fmt.Errorf("unsupported method %s", method)
 	}
-	if resp == nil {
+	if statusCode == 0 {
 		return errors.New("response is nil")
 	}
 
-	if resp.StatusCode == http.StatusNotFound {
+	if statusCode == http.StatusNotFound {
 		return ErrNotFound
 	}
 	for _, code := range expected {
-		if resp.StatusCode == code {
+		if statusCode == code {
 			return nil
 		}
 	}
-	return fmt.Errorf("unexpected status %d: %s", resp.StatusCode, http.StatusText(resp.StatusCode))
+
+	// For error responses, try to extract the API error message
+	apiErr := APIError{
+		StatusCode: statusCode,
+		HTTPStatus: http.StatusText(statusCode),
+	}
+
+	if len(body) > 0 {
+		var errorResp map[string]interface{}
+		if err := json.Unmarshal(body, &errorResp); err == nil {
+			if msg, ok := errorResp["message"].(string); ok {
+				apiErr.Message = msg
+			}
+		}
+	}
+
+	return apiErr
 }
 
 func decodeResultKey[T any](m map[string]any, key string) (T, error) {
@@ -72,7 +103,6 @@ func decodeResultKey[T any](m map[string]any, key string) (T, error) {
 	return out, nil
 }
 
-//
 // 1. read response bod for logging purposes, replace it with NopCloser buffer.
 func (c *Client) do(ctx context.Context, method, path string, body any) (*http.Response, error) {
 	var buf io.Reader
@@ -158,7 +188,6 @@ func (c *Client) retryAfter(
 	return interval
 }
 
-//
 // 1. success or non-retryable error, exit reties and return.
 // 2. close response body as it won't be closed by caller.
 func (c *Client) withRetry(ctx context.Context, method, url string, buf io.Reader) (*http.Response, error) {
@@ -193,7 +222,7 @@ func (c *Client) withRetry(ctx context.Context, method, url string, buf io.Reade
 
 		attempt++
 		tflog.Warn(ctx, "Transient error, retrying request", map[string]any{
-			"attempt": attempt,
+			"attempt":     attempt,
 			"interval_ms": interval.Milliseconds(),
 			"status": func() int {
 				if resp != nil {

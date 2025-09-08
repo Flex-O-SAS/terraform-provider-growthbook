@@ -102,6 +102,6 @@ linters:
       - text: "G104"
         linters:
           - gosec
-    paths-except:
+    paths:
       - ".*_test\\.go$"
       - lib/bad.go

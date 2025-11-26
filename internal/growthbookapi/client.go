@@ -53,6 +53,14 @@ type ClientAPI interface {
 	DeleteSDKConnection(ctx context.Context, id string) error
 	// FindSDKConnectionByName retrieves an SDK connection by its name.
 	FindSDKConnectionByName(ctx context.Context, name string) (*SDKConnection, error)
+	// CreateAttribute creates a new attribute
+	CreateAttribute(ctx context.Context, a *Attribute) (*Attribute, error)
+	// GetAttribute retrieves a features by its Property
+	GetAttribute(ctx context.Context, property string) (*Attribute, error)
+	// UpdateAttribute updates an existing attribute by its property
+	UpdateAttribute(ctx context.Context, property string, a *Attribute) (*Attribute, error)
+	// DeleteAttribute deletes an attribute by its property
+	DeleteAttribute(ctx context.Context, property string) error
 }
 
 // BackoffConfig defines the configuration for retrying transient errors.

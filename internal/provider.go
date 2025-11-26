@@ -75,6 +75,7 @@ func Provider() *schema.Provider {
 			"growthbook_feature":        resourceFeature(),
 			"growthbook_environment":    resourceEnvironment(),
 			"growthbook_sdk_connection": resourceSDKConnection(),
+			"growthbook_attribute":		 resourceAttribute(),
 		},
 		DataSourcesMap: map[string]*schema.Resource{
 			"growthbook_project":        dataSourceProject(),

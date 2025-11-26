@@ -77,6 +77,16 @@ type Environment struct {
 	Projects     []string `json:"projects,omitempty"`
 }
 
+type Attribute struct {
+	Property	string	  `json:"property"`
+	DataType	string	  `json:"datatype"`
+	Format		string	  `json:"format"`
+	EnumValues  string    `json:"enum"`
+	Projects	[]string  `json:"projects"`
+	Archived	bool	  `json:"archived"`
+	Description	string	  `json:"description"`
+}
+
 // SDKConnection represents a GrowthBook SDK Connection object.
 type SDKConnection struct {
 	ID          string `json:"id,omitempty"`

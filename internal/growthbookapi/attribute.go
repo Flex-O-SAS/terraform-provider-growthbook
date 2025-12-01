@@ -2,6 +2,7 @@ package growthbookapi
 
 import (
 	"context"
+	"errors"
 )
 
 type AttributeUpdateBody struct {
@@ -31,7 +32,7 @@ func (c *Client) GetAttribute(ctx context.Context, property string) (*Attribute,
 			return &out[i], nil
 		}
 	}
-	return nil, nil
+	return nil, ErrNotFound
 }
 
 func (c *Client) UpdateAttribute(ctx context.Context, property string, a *Attribute) (*Attribute, error) {
@@ -51,5 +52,9 @@ func (c *Client) UpdateAttribute(ctx context.Context, property string, a *Attrib
 }
 
 func (c *Client) DeleteAttribute(ctx context.Context, property string) error {
-	return c.delete(ctx, "/attributes/"+property)
+	err := c.delete(ctx, "/attributes/"+property)
+	if errors.Is(err, ErrNotFound) {
+		return nil
+	}
+	return err
 }

@@ -6,10 +6,11 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-
+	"sync"
 	"slices"
 )
 
+var attributeMutex sync.Mutex
 
 func	resourceAttribute()	*schema.Resource {
 	return &schema.Resource{
@@ -99,7 +100,13 @@ func	resourceAttributeCreate(ctx context.Context, d *schema.ResourceData, m inte
 	if (slices.Contains(FormatAcceptedValue, attribute.Format) == false) {
 		return diag.Errorf("[format] Invalid value. Expected '' | 'version' | 'date' | 'isoCountryCode', received %v", attribute.Format)
 	}
+	
+	// GrowthBook does not handle concurrent attribute creation properly and may enter a data race state. 
+	// To prevent this issue, we enforce serialized execution using a mutex, ensuring attributes are created sequentially.
+	attributeMutex.Lock()
 	created, err := client.CreateAttribute(ctx, attribute)
+	defer attributeMutex.Unlock()
+
 	if (err != nil) {
 		return diag.Errorf("error creating attribute %v %v", err, created)
 	}

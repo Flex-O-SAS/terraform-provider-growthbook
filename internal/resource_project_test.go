@@ -1,13 +1,15 @@
 package internal_test
 
 import (
-	"strconv"
 	"testing"
-
+	"strings"
+	"fmt"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
 func TestAccDataSourceGrowthBookProject_basic(t *testing.T) {
+	t.Parallel()
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:          func() { testAccPreCheck(t) },
 		ProviderFactories: testAccProviderFactories,
@@ -34,18 +36,25 @@ data "growthbook_project" "by_name" {
 
 // generateManyProjectsHCL generates HCL for N projects with unique names and descriptions.
 func generateManyProjectsHCL(prefix string, n int) string {
-	hcl := ""
+	var b strings.Builder
+	b.Grow(n * 150)
+
 	for i := 1; i <= n; i++ {
-		hcl += `resource "growthbook_project" "proj_` + strconv.Itoa(i) + `" {
-  name        = "` + prefix + strconv.Itoa(i) + `"
-  description = "Acceptance test project ` + strconv.Itoa(i) + `"
-}
-`
+		fmt.Fprintf(&b,
+			`resource "growthbook_project" "proj_%[1]d" {
+				name        = "%[2]s%[1]d"
+				description = "Acceptance test project %[1]d"
+			}
+		`, i, prefix)
 	}
-	return hcl
+
+	return b.String()
 }
 
+
 func TestAccDataSourceGrowthBookProject_manyProjects(t *testing.T) {
+	t.Parallel()
+
 	namePrefix := "tf-acc-ds-many-proj-"
 	config := generateManyProjectsHCL(namePrefix, 500) + `
 # Pick one project to read as a data source

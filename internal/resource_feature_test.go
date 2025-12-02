@@ -48,6 +48,8 @@ data "growthbook_feature" "by_id" {
 }
 
 func TestAccGrowthBookFeature_basic(t *testing.T) {
+	t.Parallel()
+
 	featureID := acctest.RandomWithPrefix("tf-acc-feature-")
 
 	resource.Test(t, resource.TestCase{

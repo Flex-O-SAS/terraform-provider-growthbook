@@ -42,6 +42,8 @@ data "growthbook_environment" "by_id" {
 }
 
 func TestAccGrowthBookEnvironment_basic(t *testing.T) {
+	t.Parallel()
+
 	envName := acctest.RandomWithPrefix("tf-acc-env-")
 
 	resource.Test(t, resource.TestCase{

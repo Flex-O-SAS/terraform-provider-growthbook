@@ -1,13 +1,16 @@
 package internal_test
 
 import (
-	"strconv"
 	"testing"
+	"fmt"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
 func TestAccDataSourceGrowthBookAttribute_basic(t *testing.T) {
+	t.Parallel()
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:          func() { testAccPreCheck(t) },
 		ProviderFactories: testAccProviderFactories,
@@ -36,23 +39,28 @@ data "growthbook_attribute" "by_property" {
 	})
 }
 
-// Génère N ressources growthbook_attribute en HCL et renvoie la string
+// Génère N ressources growthbook_attribute en HCL et renvoie la string.
 func GenerateManyAttributes(n int) string {
-	a := ""
+	var b strings.Builder
+	b.Grow(n * 120)
+
 	for i := 1; i <= n; i++ {
-		a += `
-resource "growthbook_attribute" "attribute_` + strconv.Itoa(i) + `" {
-  property    = "tf_attr_` + strconv.Itoa(i) + `"
+		fmt.Fprintf(&b, `
+resource "growthbook_attribute" "attribute_%d" {
+  property    = "tf_attr_%d"
   description = "simple test"
   datatype    = "enum"
   enum_values = "test1,test2,test3"
 }
-`
+`, i, i)
 	}
-	return a
+
+	return b.String()
 }
 
 func TestAccDataSourceGrowthbookAttribute_manyAttributes(t *testing.T) {
+	t.Parallel()
+
 	config := GenerateManyAttributes(10) + `
 data "growthbook_attribute" "attr_1" {
   property = growthbook_attribute.attribute_1.property

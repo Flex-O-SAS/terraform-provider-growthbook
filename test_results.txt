@@ -1,0 +1,3 @@
+?   	terraform-provider-growthbook/cmd	[no test files]
+ok  	terraform-provider-growthbook/internal	24.299s
+?   	terraform-provider-growthbook/internal/growthbookapi	[no test files]

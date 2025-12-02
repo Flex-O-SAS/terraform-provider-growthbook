@@ -31,6 +31,8 @@ data "growthbook_sdk_connection" "hh" {
 }
 
 func TestAccGrowthBookSDKConnection_basic(t *testing.T) {
+	t.Parallel()
+
 	connName := acctest.RandomWithPrefix("tf-acc-sdkconn-")
 
 	resource.Test(t, resource.TestCase{

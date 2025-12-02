@@ -47,7 +47,7 @@ func TestAccGrowthBookSDKConnection_basic(t *testing.T) {
 					resource.TestCheckResourceAttr("data.growthbook_sdk_connection.hh", "language", "go"),
 					resource.TestCheckResourceAttrWith("data.growthbook_sdk_connection.hh", "projects.0", func(v string) error {
 						if !strings.HasPrefix(v, "prj") {
-							return errors.New("expected projects to start with 'prj', got %s", v)
+							return fmt.Errorf("expected projects to start with 'prj', got %s", v)
 						}
 						return nil
 					}),

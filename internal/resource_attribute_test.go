@@ -1,9 +1,9 @@
 package internal_test
 
 import (
-	"testing"
 	"fmt"
 	"strings"
+	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )

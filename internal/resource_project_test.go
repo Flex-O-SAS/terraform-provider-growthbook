@@ -1,10 +1,10 @@
 package internal_test
 
 import (
-	"testing"
-	"strings"
 	"fmt"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"strings"
+	"testing"
 )
 
 func TestAccDataSourceGrowthBookProject_basic(t *testing.T) {
@@ -50,7 +50,6 @@ func generateManyProjectsHCL(prefix string, n int) string {
 
 	return b.String()
 }
-
 
 func TestAccDataSourceGrowthBookProject_manyProjects(t *testing.T) {
 	t.Parallel()

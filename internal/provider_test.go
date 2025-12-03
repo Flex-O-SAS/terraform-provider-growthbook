@@ -15,7 +15,7 @@ import (
 
 //nolint:gochecknoglobals
 var testAccProviderFactories = map[string]func() (*schema.Provider, error){
-	"growthbook": func() (*schema.Provider, error) {//nolint:unparam
+	"growthbook": func() (*schema.Provider, error) { //nolint:unparam
 		return internal.Provider(), nil
 	},
 }

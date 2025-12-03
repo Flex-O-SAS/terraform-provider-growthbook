@@ -11,22 +11,22 @@ import (
 
 func dataSourceAttribute() *schema.Resource {
 	return &schema.Resource{
-		ReadContext: dataSourceAttributeRead,		
+		ReadContext: dataSourceAttributeRead,
 		Schema: map[string]*schema.Schema{
 			"property": &schema.Schema{
-				Type: schema.TypeString,
+				Type:     schema.TypeString,
 				Required: true,
 			},
 			"datatype": &schema.Schema{
-				Type: schema.TypeString,
+				Type:     schema.TypeString,
 				Computed: true,
 			},
 			"format": &schema.Schema{
-				Type: schema.TypeString,
+				Type:     schema.TypeString,
 				Computed: true,
 			},
 			"enum_values": &schema.Schema{
-				Type: schema.TypeString,
+				Type:     schema.TypeString,
 				Computed: true,
 			},
 			"projects": &schema.Schema{
@@ -34,15 +34,15 @@ func dataSourceAttribute() *schema.Resource {
 				Elem: &schema.Schema{
 					Type: schema.TypeString,
 				},
-				Computed: true,
+				Computed:    true,
 				Description: "Array of project Id",
 			},
 			"archived": &schema.Schema{
-				Type: schema.TypeBool,
+				Type:     schema.TypeBool,
 				Computed: true,
 			},
 			"description": &schema.Schema{
-				Type: schema.TypeString,
+				Type:     schema.TypeString,
 				Computed: true,
 			},
 		},
@@ -63,12 +63,12 @@ func dataSourceAttributeRead(ctx context.Context, d *schema.ResourceData, m inte
 		}
 	}
 	d.SetId(attribute.Property)
-	d.Set("property",		attribute.Property)
-	d.Set("datatype",		attribute.DataType)
-	d.Set("format",			attribute.Format)
-	d.Set("enum_values",	attribute.EnumValues)
-	d.Set("projects",		attribute.Projects)
-	d.Set("archived",		attribute.Archived)
-	d.Set("description",	attribute.Description)
+	d.Set("property", attribute.Property)
+	d.Set("datatype", attribute.DataType)
+	d.Set("format", attribute.Format)
+	d.Set("enum_values", attribute.EnumValues)
+	d.Set("projects", attribute.Projects)
+	d.Set("archived", attribute.Archived)
+	d.Set("description", attribute.Description)
 	return nil
 }

@@ -53,7 +53,7 @@ func dataSourceAttributeRead(ctx context.Context, d *schema.ResourceData, m inte
 	client := m.(*growthbookapi.Client)
 	property := d.Get("property").(string)
 	attribute, err := client.GetAttribute(ctx, property)
-	if (err != nil) {
+	if err != nil {
 		return diag.Diagnostics{
 			diag.Diagnostic{
 				Severity: diag.Error,

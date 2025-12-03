@@ -68,10 +68,10 @@ func	resourceAttributeRead(ctx context.Context, d *schema.ResourceData, m interf
 		Description:	d.Get("description").(string),
 	}
 	out, err := client.GetAttribute(ctx, attribute.Property)
-	if (err != nil) {
+	if err != nil {
 		return diag.Errorf("error reading attribute: %v", err)
 	}
-	if (out == nil) {
+	if out == nil {
 		return diag.Errorf("error reading attribute: %v", attribute.Property)
 	}
 	d.Set("property", 		out.Property)
@@ -97,17 +97,17 @@ func	resourceAttributeCreate(ctx context.Context, d *schema.ResourceData, m inte
 	}
 
 	FormatAcceptedValue := []string{"", "version", "date", "isoCountryCode"}
-	if (slices.Contains(FormatAcceptedValue, attribute.Format) == false) {
+	if slices.Contains(FormatAcceptedValue, attribute.Format) == false {
 		return diag.Errorf("[format] Invalid value. Expected '' | 'version' | 'date' | 'isoCountryCode', received %v", attribute.Format)
 	}
 	
 	// GrowthBook does not handle concurrent attribute creation properly and may enter a data race state. 
 	// To prevent this issue, we enforce serialized execution using a mutex, ensuring attributes are created sequentially.
 	attributeMutex.Lock()
-	created, err := client.CreateAttribute(ctx, attribute)
 	defer attributeMutex.Unlock()
+	created, err := client.CreateAttribute(ctx, attribute)
 
-	if (err != nil) {
+	if err != nil {
 		return diag.Errorf("error creating attribute %v %v", err, created)
 	}
 	d.SetId(created.Property)

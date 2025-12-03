@@ -16,7 +16,7 @@ type AttributeUpdateBody struct {
 
 func (c *Client) CreateAttribute(ctx context.Context, a *Attribute) (*Attribute, error) {
 	out, err := fetcher[Attribute](c, "POST", "/attributes").One(ctx, a, "attribute")
-	if (err != nil) {
+	if err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -24,11 +24,11 @@ func (c *Client) CreateAttribute(ctx context.Context, a *Attribute) (*Attribute,
 
 func (c *Client) GetAttribute(ctx context.Context, property string) (*Attribute, error) {
 	out, err := fetcher[[]Attribute](c, "GET", "/attributes").One(ctx, nil, "attributes")
-	if (err != nil) {
+	if err != nil {
 		return nil, err
 	}
 	for i := 0; i < len(out); i++ {
-		if (out[i].Property == property) {
+		if out[i].Property == property {
 			return &out[i], nil
 		}
 	}
@@ -45,7 +45,7 @@ func (c *Client) UpdateAttribute(ctx context.Context, property string, a *Attrib
 		Description:	a.Description,
 	}
 	out, err := fetcher[Attribute](c, "PUT", "/attributes/"+property).One(ctx, body, "attribute")
-	if (err != nil) {
+	if err != nil {
 		return nil, err
 	}
 	return &out, nil

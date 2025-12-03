@@ -75,12 +75,14 @@ func Provider() *schema.Provider {
 			"growthbook_feature":        resourceFeature(),
 			"growthbook_environment":    resourceEnvironment(),
 			"growthbook_sdk_connection": resourceSDKConnection(),
+			"growthbook_attribute":      resourceAttribute(),
 		},
 		DataSourcesMap: map[string]*schema.Resource{
 			"growthbook_project":        dataSourceProject(),
 			"growthbook_environment":    dataSourceEnvironment(),
 			"growthbook_feature":        dataSourceFeature(),
 			"growthbook_sdk_connection": dataSourceSDKConnection(),
+			"growthbook_attribute":      dataSourceAttribute(),
 		},
 		ConfigureContextFunc: configureProvider,
 	}

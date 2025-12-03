@@ -13,18 +13,22 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
+//nolint:gochecknoglobals
 var testAccProviderFactories = map[string]func() (*schema.Provider, error){
-	"growthbook": func() (*schema.Provider, error) {
+	"growthbook": func() (*schema.Provider, error) { //nolint:unparam
 		return internal.Provider(), nil
 	},
 }
 
 func testAccPreCheck(t *testing.T) {
+	t.Helper()
+
 	if v := os.Getenv("GROWTHBOOK_API_KEY"); v == "" {
 		t.Fatal("GROWTHBOOK_API_KEY must be set for acceptance tests")
 	}
 }
 
+//nolint:unparam
 func testCheckResourceAttrPrefix(resourceName, attr, prefix string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		rs, ok := s.RootModule().Resources[resourceName]

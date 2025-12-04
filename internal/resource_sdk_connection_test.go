@@ -1,12 +1,12 @@
 package internal_test
 
 import (
-	"fmt"
-	"strings"
-	"testing"
 	"errors"
+	"fmt"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"strings"
+	"testing"
 )
 
 func testAccSDKConnectionConfig(name string) string {

@@ -19,6 +19,9 @@ func resourceAttribute() *schema.Resource {
 		UpdateContext: resourceAttributeUpdate,
 		DeleteContext: resourceAttributeDelete,
 
+		Importer: &schema.ResourceImporter{
+			StateContext: schema.ImportStatePassthroughContext,
+		},
 		Schema: map[string]*schema.Schema{
 			"property": &schema.Schema{
 				Type:     schema.TypeString,
@@ -58,21 +61,13 @@ func resourceAttribute() *schema.Resource {
 
 func resourceAttributeRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	client := m.(*growthbookapi.Client)
-	attribute := &growthbookapi.Attribute{
-		Property:    d.Get("property").(string),
-		DataType:    d.Get("datatype").(string),
-		Format:      d.Get("format").(string),
-		EnumValues:  d.Get("enum_values").(string),
-		Projects:    retrieveStrings(d.Get("projects").([]interface{})),
-		Archived:    d.Get("archived").(bool),
-		Description: d.Get("description").(string),
-	}
-	out, err := client.GetAttribute(ctx, attribute.Property)
+	property := d.Id()
+	out, err := client.GetAttribute(ctx, property)
 	if err != nil {
 		return diag.Errorf("error reading attribute: %v", err)
 	}
 	if out == nil {
-		return diag.Errorf("error reading attribute: %v", attribute.Property)
+		return diag.Errorf("error reading attribute: %v", property)
 	}
 	d.Set("property", out.Property)
 	d.Set("datatype", out.DataType)

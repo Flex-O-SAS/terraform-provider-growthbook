@@ -17,13 +17,13 @@ jobs:
       pull-requests: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Bump version and create tag
         id: tag_version
-        uses: anothrNick/github-tag-action@1.73.0
+        uses: anothrNick/github-tag-action@1.75.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DEFAULT_BUMP: patch
@@ -33,9 +33,8 @@ jobs:
           INITIAL_VERSION: 0.1.0
           TAG_CONTEXT: repo
           CONVENTIONAL_COMMITS: true
-
       - name: Comment on PR with new tag
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const prNumber = context.payload.pull_request.number;
@@ -52,9 +51,9 @@ jobs:
           NEW_TAG: ${{ steps.tag_version.outputs.new_tag }}
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.23'
+          go-version: '1.24'
 
       - name: Import GPG key
         uses: crazy-max/ghaction-import-gpg@v6
@@ -74,7 +73,7 @@ jobs:
           GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
 
       - name: Comment on PR with new release
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const prNumber = context.payload.pull_request.number;

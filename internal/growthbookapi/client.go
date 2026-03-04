@@ -61,6 +61,26 @@ type ClientAPI interface {
 	UpdateAttribute(ctx context.Context, property string, a *Attribute) (*Attribute, error)
 	// DeleteAttribute deletes an attribute by its property
 	DeleteAttribute(ctx context.Context, property string) error
+	// CreateTeam creates a new team.
+	CreateTeam(ctx context.Context, t *Team) (*Team, error)
+	// GetTeam retrieves a team by its ID.
+	GetTeam(ctx context.Context, id string) (*Team, error)
+	// UpdateTeam updates an existing team by its ID.
+	UpdateTeam(ctx context.Context, id string, t *Team) (*Team, error)
+	// DeleteTeam deletes a team by its ID.
+	DeleteTeam(ctx context.Context, id string) error
+	// FindTeamByName retrieves a team by its name.
+	FindTeamByName(ctx context.Context, name string) (*Team, error)
+	// ListMembers retrieves all organization members.
+	ListMembers(ctx context.Context) ([]Member, error)
+	// GetMember retrieves a member by its ID.
+	GetMember(ctx context.Context, id string) (*Member, error)
+	// FindMemberByEmail retrieves a member by email.
+	FindMemberByEmail(ctx context.Context, email string) (*Member, error)
+	// UpdateMemberRole updates a member's role and permissions.
+	UpdateMemberRole(ctx context.Context, id string, update *MemberRoleUpdate) (*Member, error)
+	// DeleteMember removes a member from the organization.
+	DeleteMember(ctx context.Context, id string) error
 }
 
 // BackoffConfig defines the configuration for retrying transient errors.

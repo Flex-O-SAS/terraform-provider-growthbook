@@ -87,6 +87,59 @@ type Attribute struct {
 	Description	string	  `json:"description"`
 }
 
+// Member represents a GrowthBook organization member.
+type Member struct {
+	ID                       string        `json:"id,omitempty"`
+	Name                     string        `json:"name,omitempty"`
+	Email                    string        `json:"email,omitempty"`
+	Role                     string        `json:"role,omitempty"`
+	LimitAccessByEnvironment bool          `json:"limitAccessByEnvironment"`
+	Environments             []string      `json:"environments"`
+	ProjectRoles             []ProjectRole `json:"projectRoles"`
+	Teams                    []string      `json:"teams,omitempty"`
+	ManagedByIdp             bool          `json:"managedByIdp,omitempty"`
+	LastLoginDate            string        `json:"lastLoginDate,omitempty"`
+	DateCreated              string        `json:"dateCreated,omitempty"`
+	DateUpdated              string        `json:"dateUpdated,omitempty"`
+}
+
+// MemberRoleUpdate represents the payload for POST /members/{id}/role.
+type MemberRoleUpdate struct {
+	Role                     string        `json:"role"`
+	Environments             []string      `json:"environments"`
+	LimitAccessByEnvironment bool          `json:"limitAccessByEnvironment"`
+	ProjectRoles             []ProjectRole `json:"projectRoles"`
+}
+
+// ProjectRole represents a per-project role assignment.
+type ProjectRole struct {
+	Project                  string   `json:"project"`
+	Role                     string   `json:"role"`
+	LimitAccessByEnvironment bool     `json:"limitAccessByEnvironment"`
+	Environments             []string `json:"environments"`
+}
+
+// Team represents a GrowthBook team.
+type Team struct {
+	ID                       string        `json:"id,omitempty"`
+	Name                     string        `json:"name"`
+	Description              string        `json:"description"`
+	Role                     string        `json:"role"`
+	LimitAccessByEnvironment bool          `json:"limitAccessByEnvironment"`
+	Environments             []string      `json:"environments"`
+	ProjectRoles             []ProjectRole `json:"projectRoles"`
+	Members                  []string      `json:"members"`
+	ManagedByIdp             bool          `json:"managedByIdp,omitempty"`
+	CreatedBy                string        `json:"createdBy,omitempty"`
+	DateCreated              string        `json:"dateCreated,omitempty"`
+	DateUpdated              string        `json:"dateUpdated,omitempty"`
+}
+
+// TeamMemberUpdate represents the payload for adding/removing team members.
+type TeamMemberUpdate struct {
+	Members []string `json:"members"`
+}
+
 // SDKConnection represents a GrowthBook SDK Connection object.
 type SDKConnection struct {
 	ID          string `json:"id,omitempty"`

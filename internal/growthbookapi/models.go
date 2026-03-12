@@ -25,7 +25,7 @@ type Feature struct {
 	ValueType     string                              `json:"valueType,omitempty"`
 	DefaultValue  string                              `json:"defaultValue,omitempty"`
 	Tags          []string                            `json:"tags"`
-	Environments  map[string]FeatureEnvironmentConfig `json:"-"`
+	Environments  map[string]FeatureEnvironmentConfig `json:"environments,omitempty"`
 	Prerequisites []string                            `json:"prerequisites"`
 }
 
@@ -39,14 +39,27 @@ type FeatureEnvironmentConfig struct {
 
 // FeatureRule represents a targeting rule for a feature in GrowthBook.
 type FeatureRule struct {
-	Condition           string                       `json:"condition,omitempty"`
-	Description         string                       `json:"description,omitempty"`
-	ID                  string                       `json:"id,omitempty"`
-	Enabled             bool                         `json:"enabled"`
-	Type                string                       `json:"type"`
-	Value               string                       `json:"value,omitempty"`
-	SavedGroupTargeting []FeatureSavedGroupTargeting `json:"savedGroupTargeting"`
+	ID          string `json:"id,omitempty"`
+	Type        string `json:"type"`
+	Enabled     bool   `json:"enabled"`
+	Description string `json:"description,omitempty"`
+	Condition   string `json:"condition,omitempty"`
+	// force / rollout
+	Value string `json:"value,omitempty"`
+	// rollout only
+	Coverage      *float64 `json:"coverage,omitempty"`
+	HashAttribute string   `json:"hashAttribute,omitempty"`
+	// experiment-ref only
+	ExperimentID        string                       `json:"experimentId,omitempty"`
+	Variations          []FeatureVariation           `json:"variations,omitempty"`
+	SavedGroupTargeting []FeatureSavedGroupTargeting `json:"savedGroupTargeting,omitempty"`
 	Prerequisites       []FeaturePrerequisite        `json:"prerequisites,omitempty"`
+}
+
+// FeatureVariation represents a single variation in an experiment-ref rule.
+type FeatureVariation struct {
+	Value       string `json:"value"`
+	VariationID string `json:"variationId"`
 }
 
 // FeatureSavedGroupTargeting represents targeting configuration based on saved groups.
@@ -78,13 +91,13 @@ type Environment struct {
 }
 
 type Attribute struct {
-	Property	string	  `json:"property"`
-	DataType	string	  `json:"datatype"`
-	Format		string	  `json:"format"`
-	EnumValues  string    `json:"enum"`
-	Projects	[]string  `json:"projects"`
-	Archived	bool	  `json:"archived"`
-	Description	string	  `json:"description"`
+	Property    string   `json:"property"`
+	DataType    string   `json:"datatype"`
+	Format      string   `json:"format"`
+	EnumValues  string   `json:"enum"`
+	Projects    []string `json:"projects"`
+	Archived    bool     `json:"archived"`
+	Description string   `json:"description"`
 }
 
 // SDKConnection represents a GrowthBook SDK Connection object.

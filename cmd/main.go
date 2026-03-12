@@ -2,13 +2,19 @@
 package main
 
 import (
+	"context"
+	"log"
+
 	"terraform-provider-growthbook/internal"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/plugin"
+	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 )
 
 func main() {
-	plugin.Serve(&plugin.ServeOpts{
-		ProviderFunc: internal.Provider,
+	err := providerserver.Serve(context.Background(), internal.New, providerserver.ServeOpts{
+		Address: "registry.terraform.io/hashicorp/growthbook",
 	})
+	if err != nil {
+		log.Fatal(err)
+	}
 }

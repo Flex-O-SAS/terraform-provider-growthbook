@@ -2,91 +2,169 @@ package internal
 
 import (
 	"context"
-	"terraform-provider-growthbook/internal/growthbookapi"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"terraform-provider-growthbook/internal/growthbookapi"
 )
 
-func dataSourceFeature() *schema.Resource {
-	return &schema.Resource{
-		ReadContext: dataSourceFeatureRead,
-		Schema: map[string]*schema.Schema{
-			"id": {
-				Type:        schema.TypeString,
-				Required:    true,
-				Description: "The id of the GrowthBook feature.",
-			},
-			"archived": {
-				Type:     schema.TypeBool,
-				Computed: true,
-			},
-			"description": {
-				Type:     schema.TypeString,
-				Computed: true,
-			},
-			"owner": {
-				Type:     schema.TypeString,
-				Computed: true,
-			},
-			"project": {
-				Type:     schema.TypeString,
-				Computed: true,
-			},
-			"value_type": {
-				Type:     schema.TypeString,
-				Computed: true,
-			},
-			"default_value": {
-				Type:     schema.TypeString,
-				Computed: true,
-			},
-			"tags": {
-				Type:     schema.TypeList,
-				Elem:     &schema.Schema{Type: schema.TypeString},
-				Computed: true,
-			},
-			"environments": {
-				Type: schema.TypeMap,
-				// For simplicity, you may want to expand this for full nested support
-				Elem:     &schema.Schema{Type: schema.TypeString},
-				Computed: true,
-			},
-			"prerequisites": {
-				Type:     schema.TypeList,
-				Elem:     &schema.Schema{Type: schema.TypeString},
-				Computed: true,
-			},
-			"json_schema": {
-				Type:     schema.TypeString,
-				Computed: true,
+var _ datasource.DataSource = &featureDataSource{}
+
+func newFeatureDataSource() datasource.DataSource {
+	return &featureDataSource{}
+}
+
+type featureDataSource struct {
+	client *growthbookapi.Client
+}
+
+type featureDataModel struct {
+	ID            types.String `tfsdk:"id"`
+	Archived      types.Bool   `tfsdk:"archived"`
+	Description   types.String `tfsdk:"description"`
+	Owner         types.String `tfsdk:"owner"`
+	Project       types.String `tfsdk:"project"`
+	ValueType     types.String `tfsdk:"value_type"`
+	DefaultValue  types.String `tfsdk:"default_value"`
+	Tags          types.List   `tfsdk:"tags"`
+	Environments  types.Map    `tfsdk:"environments"`
+	Prerequisites types.List   `tfsdk:"prerequisites"`
+}
+
+func featureDataEnvironmentSchemaAttr() schema.MapNestedAttribute {
+	return schema.MapNestedAttribute{
+		Computed: true,
+		NestedObject: schema.NestedAttributeObject{
+			Attributes: map[string]schema.Attribute{
+				"enabled": schema.BoolAttribute{
+					Computed: true,
+				},
+				"default_value": schema.StringAttribute{
+					Computed: true,
+				},
+				"rules": schema.ListNestedAttribute{
+					Computed: true,
+					NestedObject: schema.NestedAttributeObject{
+						Attributes: map[string]schema.Attribute{
+							"id":          schema.StringAttribute{Computed: true},
+							"type":        schema.StringAttribute{Computed: true},
+							"enabled":     schema.BoolAttribute{Computed: true},
+							"description": schema.StringAttribute{Computed: true},
+							"condition":   schema.StringAttribute{Computed: true},
+							"value":       schema.StringAttribute{Computed: true},
+							"coverage":    schema.Float64Attribute{Computed: true},
+							"hash_attribute": schema.StringAttribute{Computed: true},
+							"experiment_id":  schema.StringAttribute{Computed: true},
+							"variations": schema.ListNestedAttribute{
+								Computed: true,
+								NestedObject: schema.NestedAttributeObject{
+									Attributes: map[string]schema.Attribute{
+										"value":        schema.StringAttribute{Computed: true},
+										"variation_id": schema.StringAttribute{Computed: true},
+									},
+								},
+							},
+							"prerequisites": schema.ListNestedAttribute{
+								Computed: true,
+								NestedObject: schema.NestedAttributeObject{
+									Attributes: map[string]schema.Attribute{
+										"id":        schema.StringAttribute{Computed: true},
+										"condition": schema.StringAttribute{Computed: true},
+									},
+								},
+							},
+						},
+					},
+				},
 			},
 		},
 	}
 }
 
-func dataSourceFeatureRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*growthbookapi.Client)
-	id := d.Get("id").(string)
-	feature, err := client.GetFeature(ctx, id)
-	if err != nil {
-		return diag.Diagnostics{
-			diag.Diagnostic{
-				Severity: diag.Error,
-				Summary:  "Unable to find GrowthBook feature by id",
-				Detail:   err.Error(),
+func (d *featureDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_feature"
+}
+
+func (d *featureDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"id": schema.StringAttribute{
+				Required:    true,
+				Description: "The ID of the GrowthBook feature.",
 			},
-		}
+			"archived": schema.BoolAttribute{
+				Computed: true,
+			},
+			"description": schema.StringAttribute{
+				Computed: true,
+			},
+			"owner": schema.StringAttribute{
+				Computed: true,
+			},
+			"project": schema.StringAttribute{
+				Computed: true,
+			},
+			"value_type": schema.StringAttribute{
+				Computed: true,
+			},
+			"default_value": schema.StringAttribute{
+				Computed: true,
+			},
+			"tags": schema.ListAttribute{
+				ElementType: types.StringType,
+				Computed:    true,
+			},
+			"environments": featureDataEnvironmentSchemaAttr(),
+			"prerequisites": schema.ListAttribute{
+				ElementType: types.StringType,
+				Computed:    true,
+			},
+		},
 	}
-	d.SetId(feature.ID)
-	d.Set("archived", feature.Archived)
-	d.Set("description", feature.Description)
-	d.Set("owner", feature.Owner)
-	d.Set("project", feature.Project)
-	d.Set("value_type", feature.ValueType)
-	d.Set("default_value", feature.DefaultValue)
-	d.Set("tags", feature.Tags)
-	d.Set("environments", feature.Environments)
-	d.Set("prerequisites", feature.Prerequisites)
-	return nil
+}
+
+func (d *featureDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
+	if req.ProviderData == nil {
+		return
+	}
+	client, ok := req.ProviderData.(*growthbookapi.Client)
+	if !ok {
+		resp.Diagnostics.AddError("Unexpected provider data type", "Expected *growthbookapi.Client")
+		return
+	}
+	d.client = client
+}
+
+func (d *featureDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
+	var data featureDataModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	feature, err := d.client.GetFeature(ctx, data.ID.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to find GrowthBook feature by ID", err.Error())
+		return
+	}
+
+	data.ID = types.StringValue(feature.ID)
+	data.Archived = types.BoolValue(feature.Archived)
+	data.Description = types.StringValue(feature.Description)
+	data.Owner = types.StringValue(feature.Owner)
+	data.Project = types.StringValue(feature.Project)
+	data.ValueType = types.StringValue(feature.ValueType)
+	data.DefaultValue = types.StringValue(feature.DefaultValue)
+	data.Tags = stringsToList(ctx, feature.Tags)
+	data.Prerequisites = stringsToList(ctx, feature.Prerequisites)
+
+	envsMap := envsFromAPI(feature.Environments)
+	var envDiags diag.Diagnostics
+	data.Environments, envDiags = types.MapValueFrom(ctx, featureEnvObjectType(), envsMap)
+	resp.Diagnostics.Append(envDiags...)
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }

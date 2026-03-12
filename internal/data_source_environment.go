@@ -2,64 +2,94 @@ package internal
 
 import (
 	"context"
-	"terraform-provider-growthbook/internal/growthbookapi"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"terraform-provider-growthbook/internal/growthbookapi"
 )
 
-func dataSourceEnvironment() *schema.Resource {
-	return &schema.Resource{
-		ReadContext: dataSourceEnvironmentRead,
-		Schema: map[string]*schema.Schema{
-			"id": {
-				Type:        schema.TypeString,
+var _ datasource.DataSource = &environmentDataSource{}
+
+func newEnvironmentDataSource() datasource.DataSource {
+	return &environmentDataSource{}
+}
+
+type environmentDataSource struct {
+	client *growthbookapi.Client
+}
+
+type environmentDataModel struct {
+	ID           types.String `tfsdk:"id"`
+	Description  types.String `tfsdk:"description"`
+	ToggleOnList types.Bool   `tfsdk:"toggle_on_list"`
+	DefaultState types.Bool   `tfsdk:"default_state"`
+	Projects     types.List   `tfsdk:"projects"`
+}
+
+func (d *environmentDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_environment"
+}
+
+func (d *environmentDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"id": schema.StringAttribute{
 				Required:    true,
 				Description: "The ID of the GrowthBook environment.",
 			},
-			"description": {
-				Type:        schema.TypeString,
+			"description": schema.StringAttribute{
 				Computed:    true,
 				Description: "The description of the GrowthBook environment.",
 			},
-			"toggle_on_list": {
-				Type:        schema.TypeBool,
+			"toggle_on_list": schema.BoolAttribute{
 				Computed:    true,
 				Description: "Show toggle on feature list.",
 			},
-			"default_state": {
-				Type:        schema.TypeBool,
+			"default_state": schema.BoolAttribute{
 				Computed:    true,
 				Description: "Default state for new features.",
 			},
-			"projects": {
-				Type:        schema.TypeList,
+			"projects": schema.ListAttribute{
+				ElementType: types.StringType,
 				Computed:    true,
-				Elem:        &schema.Schema{Type: schema.TypeString},
 				Description: "Projects associated with the environment.",
 			},
 		},
 	}
 }
 
-func dataSourceEnvironmentRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*growthbookapi.Client)
-	id := d.Get("id").(string)
-	env, err := client.FindEnvironmentByID(ctx, id)
-	if err != nil {
-		return diag.Diagnostics{
-			diag.Diagnostic{
-				Severity: diag.Error,
-				Summary:  "Unable to find GrowthBook environment by ID",
-				Detail:   err.Error(),
-			},
-		}
+func (d *environmentDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
+	if req.ProviderData == nil {
+		return
 	}
-	d.SetId(env.ID)
-	d.Set("description", env.Description)
-	d.Set("toggle_on_list", env.ToggleOnList)
-	d.Set("default_state", env.DefaultState)
-	d.Set("projects", env.Projects)
+	client, ok := req.ProviderData.(*growthbookapi.Client)
+	if !ok {
+		resp.Diagnostics.AddError("Unexpected provider data type", "Expected *growthbookapi.Client")
+		return
+	}
+	d.client = client
+}
 
-	return nil
+func (d *environmentDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
+	var data environmentDataModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	env, err := d.client.FindEnvironmentByID(ctx, data.ID.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to find GrowthBook environment by ID", err.Error())
+		return
+	}
+
+	data.ID = types.StringValue(env.ID)
+	data.Description = types.StringValue(env.Description)
+	data.ToggleOnList = types.BoolValue(env.ToggleOnList)
+	data.DefaultState = types.BoolValue(env.DefaultState)
+	data.Projects = stringsToList(ctx, env.Projects)
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }

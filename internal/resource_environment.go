@@ -2,122 +2,210 @@ package internal
 
 import (
 	"context"
-	"terraform-provider-growthbook/internal/growthbookapi"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"terraform-provider-growthbook/internal/growthbookapi"
 )
 
-func resourceEnvironment() *schema.Resource {
-	return &schema.Resource{
-		CreateContext: resourceEnvironmentCreate,
-		ReadContext:   resourceEnvironmentRead,
-		UpdateContext: resourceEnvironmentUpdate,
-		DeleteContext: resourceEnvironmentDelete,
-		Importer: &schema.ResourceImporter{
-			StateContext: schema.ImportStatePassthroughContext,
-		},
-		Schema: map[string]*schema.Schema{
-			"id": {
-				Type:     schema.TypeString,
+var _ resource.Resource = &environmentResource{}
+var _ resource.ResourceWithImportState = &environmentResource{}
+
+func newEnvironmentResource() resource.Resource {
+	return &environmentResource{}
+}
+
+type environmentResource struct {
+	client *growthbookapi.Client
+}
+
+type environmentModel struct {
+	ID           types.String `tfsdk:"id"`
+	Name         types.String `tfsdk:"name"`
+	Description  types.String `tfsdk:"description"`
+	ToggleOnList types.Bool   `tfsdk:"toggle_on_list"`
+	DefaultState types.Bool   `tfsdk:"default_state"`
+	Projects     types.List   `tfsdk:"projects"`
+}
+
+func (r *environmentResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_environment"
+}
+
+func (r *environmentResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"id": schema.StringAttribute{
+				Computed: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"name": schema.StringAttribute{
+				Required: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"description": schema.StringAttribute{
+				Optional: true,
 				Computed: true,
 			},
-			"name": {
-				Type:     schema.TypeString,
-				Required: true,
-				ForceNew: true,
-			},
-			"description": {
-				Type:     schema.TypeString,
+			"toggle_on_list": schema.BoolAttribute{
 				Optional: true,
+				Computed: true,
 			},
-			"toggle_on_list": {
-				Type:     schema.TypeBool,
+			"default_state": schema.BoolAttribute{
 				Optional: true,
+				Computed: true,
 			},
-			"default_state": {
-				Type:     schema.TypeBool,
-				Optional: true,
-			},
-			"projects": {
-				Type:     schema.TypeList,
-				Optional: true,
-				Elem:     &schema.Schema{Type: schema.TypeString},
+			"projects": schema.ListAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+				Computed:    true,
 			},
 		},
 	}
 }
 
-func resourceEnvironmentCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*growthbookapi.Client)
+func (r *environmentResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+	if req.ProviderData == nil {
+		return
+	}
+	client, ok := req.ProviderData.(*growthbookapi.Client)
+	if !ok {
+		resp.Diagnostics.AddError("Unexpected provider data type", "Expected *growthbookapi.Client")
+		return
+	}
+	r.client = client
+}
+
+func (r *environmentResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	var data environmentModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	env := &growthbookapi.Environment{
-		ID:           d.Get("name").(string),
-		Description:  d.Get("description").(string),
-		ToggleOnList: d.Get("toggle_on_list").(bool),
-		DefaultState: d.Get("default_state").(bool),
+		ID:           data.Name.ValueString(),
+		Description:  data.Description.ValueString(),
+		ToggleOnList: data.ToggleOnList.ValueBool(),
+		DefaultState: data.DefaultState.ValueBool(),
 	}
-	if v, ok := d.GetOk("projects"); ok {
-		projects := []string{}
-		for _, p := range v.([]interface{}) {
-			projects = append(projects, p.(string))
+	projects := []string{}
+	if !data.Projects.IsNull() && !data.Projects.IsUnknown() {
+		resp.Diagnostics.Append(data.Projects.ElementsAs(ctx, &projects, false)...)
+		if resp.Diagnostics.HasError() {
+			return
 		}
-		env.Projects = projects
 	}
-	created, err := client.CreateEnvironment(ctx, env)
-	if err != nil {
-		return diag.Errorf("error creating environment: %v", err)
-	}
-	d.SetId(created.ID)
+	env.Projects = projects
 
-	return resourceEnvironmentRead(ctx, d, m)
+	created, err := r.client.CreateEnvironment(ctx, env)
+	if err != nil {
+		resp.Diagnostics.AddError("Error creating environment", err.Error())
+		return
+	}
+
+	data.ID = types.StringValue(created.ID)
+	data.Name = types.StringValue(created.ID)
+	data.Description = types.StringValue(created.Description)
+	data.ToggleOnList = types.BoolValue(created.ToggleOnList)
+	data.DefaultState = types.BoolValue(created.DefaultState)
+	data.Projects = stringsToList(ctx, created.Projects)
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func resourceEnvironmentRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*growthbookapi.Client)
-	id := d.Id()
-	env, err := client.FindEnvironmentByID(ctx, id)
-	if err != nil {
-		return diag.Errorf("error reading environment: %v", err)
+func (r *environmentResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	var data environmentModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
 	}
-	d.Set("name", env.ID)
-	d.Set("description", env.Description)
-	d.Set("toggle_on_list", env.ToggleOnList)
-	d.Set("default_state", env.DefaultState)
-	d.Set("projects", env.Projects)
 
-	return nil
+	env, err := r.client.FindEnvironmentByID(ctx, data.ID.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading environment", err.Error())
+		return
+	}
+
+	data.Name = types.StringValue(env.ID)
+	data.Description = types.StringValue(env.Description)
+	data.ToggleOnList = types.BoolValue(env.ToggleOnList)
+	data.DefaultState = types.BoolValue(env.DefaultState)
+	data.Projects = stringsToList(ctx, env.Projects)
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func resourceEnvironmentUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*growthbookapi.Client)
-	id := d.Id()
+func (r *environmentResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var data environmentModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	var state environmentModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	env := &growthbookapi.Environment{
-		Description:  d.Get("description").(string),
-		ToggleOnList: d.Get("toggle_on_list").(bool),
-		DefaultState: d.Get("default_state").(bool),
+		Description:  data.Description.ValueString(),
+		ToggleOnList: data.ToggleOnList.ValueBool(),
+		DefaultState: data.DefaultState.ValueBool(),
 	}
-	if v, ok := d.GetOk("projects"); ok {
-		projects := []string{}
-		for _, p := range v.([]interface{}) {
-			projects = append(projects, p.(string))
+	projects := []string{}
+	if !data.Projects.IsNull() && !data.Projects.IsUnknown() {
+		resp.Diagnostics.Append(data.Projects.ElementsAs(ctx, &projects, false)...)
+		if resp.Diagnostics.HasError() {
+			return
 		}
-		env.Projects = projects
 	}
-	_, err := client.UpdateEnvironment(ctx, id, env)
+	env.Projects = projects
+
+	_, err := r.client.UpdateEnvironment(ctx, state.ID.ValueString(), env)
 	if err != nil {
-		return diag.Errorf("error updating environment: %v", err)
+		resp.Diagnostics.AddError("Error updating environment", err.Error())
+		return
 	}
 
-	return resourceEnvironmentRead(ctx, d, m)
+	data.ID = state.ID
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func resourceEnvironmentDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*growthbookapi.Client)
-	id := d.Id()
-	if err := client.DeleteEnvironment(ctx, id); err != nil {
-		return diag.Errorf("Failed to delete environment: %s", err)
+func (r *environmentResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var data environmentModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
 	}
-	d.SetId("")
 
-	return nil
+	if err := r.client.DeleteEnvironment(ctx, data.ID.ValueString()); err != nil {
+		resp.Diagnostics.AddError("Error deleting environment", err.Error())
+	}
+}
+
+func (r *environmentResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+}
+
+// stringsToList converts a []string to a types.List of strings.
+// Since elements are always valid strings, this never returns an error.
+func stringsToList(_ context.Context, ss []string) types.List {
+	elems := make([]attr.Value, len(ss))
+	for i, s := range ss {
+		elems[i] = types.StringValue(s)
+	}
+	list, _ := types.ListValue(types.StringType, elems)
+	return list
 }

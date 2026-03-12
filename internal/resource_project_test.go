@@ -2,22 +2,26 @@ package internal_test
 
 import (
 	"fmt"
-	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"strings"
 	"testing"
+
+	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
 func TestAccDataSourceGrowthBookProject_basic(t *testing.T) {
 	t.Parallel()
 
+	name := acctest.RandomWithPrefix("tf-acc-proj-")
+
 	resource.Test(t, resource.TestCase{
-		PreCheck:          func() { testAccPreCheck(t) },
-		ProviderFactories: testAccProviderFactories,
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				Config: `
 resource "growthbook_project" "test" {
-  name = "tf-acc-ds-proj"
+  name        = "` + name + `"
   description = "super description"
 }
 data "growthbook_project" "by_name" {
@@ -25,7 +29,7 @@ data "growthbook_project" "by_name" {
 }
 `,
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("data.growthbook_project.by_name", "name", "tf-acc-ds-proj"),
+					resource.TestCheckResourceAttr("data.growthbook_project.by_name", "name", name),
 					testCheckResourceAttrPrefix("data.growthbook_project.by_name", "id", "prj"),
 					resource.TestCheckResourceAttr("data.growthbook_project.by_name", "description", "super description"),
 				),
@@ -54,7 +58,7 @@ func generateManyProjectsHCL(prefix string, n int) string {
 func TestAccDataSourceGrowthBookProject_manyProjects(t *testing.T) {
 	t.Parallel()
 
-	namePrefix := "tf-acc-ds-many-proj-"
+	namePrefix := acctest.RandomWithPrefix("tf-acc-proj-")
 	config := generateManyProjectsHCL(namePrefix, 500) + `
 # Pick one project to read as a data source
 data "growthbook_project" "by_name1" {
@@ -69,7 +73,7 @@ data "growthbook_project" "by_name2" {
 `
 	resource.Test(t, resource.TestCase{
 		PreCheck:          func() { testAccPreCheck(t) },
-		ProviderFactories: testAccProviderFactories,
+		ProtoV6ProviderFactories: testAccProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				Config: config,

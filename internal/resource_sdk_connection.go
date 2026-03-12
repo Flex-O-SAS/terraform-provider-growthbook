@@ -2,290 +2,310 @@ package internal
 
 import (
 	"context"
-	"terraform-provider-growthbook/internal/growthbookapi"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"terraform-provider-growthbook/internal/growthbookapi"
 )
 
-func resourceSDKConnection() *schema.Resource {
-	return &schema.Resource{
-		CreateContext: resourceSDKConnectionCreate,
-		ReadContext:   resourceSDKConnectionRead,
-		UpdateContext: resourceSDKConnectionUpdate,
-		DeleteContext: resourceSDKConnectionDelete,
-		Importer: &schema.ResourceImporter{
-			StateContext: schema.ImportStatePassthroughContext,
-		},
-		Schema: map[string]*schema.Schema{
-			"id": {
-				Type:     schema.TypeString,
-				Computed: true,
-			},
-			"name": {
-				Type:     schema.TypeString,
-				Required: true,
-			},
-			"environment": {
-				Type:     schema.TypeString,
-				Required: true,
-			},
-			"language": {
-				Type:     schema.TypeString,
-				Required: true,
-			},
-			"sdk_version": {
-				Type:     schema.TypeString,
-				Optional: true,
-				Computed: true,
-			},
-			"projects": {
-				Type:     schema.TypeList,
-				Elem:     &schema.Schema{Type: schema.TypeString},
-				Optional: true,
-			},
-			"encrypt_payload": {
-				Type:     schema.TypeBool,
-				Optional: true,
-			},
-			"include_visual_experiments": {
-				Type:     schema.TypeBool,
-				Optional: true,
-			},
-			"include_draft_experiments": {
-				Type:     schema.TypeBool,
-				Optional: true,
-			},
-			"include_experiment_names": {
-				Type:     schema.TypeBool,
-				Optional: true,
-			},
-			"include_redirect_experiments": {
-				Type:     schema.TypeBool,
-				Optional: true,
-			},
-			"include_rule_ids": {
-				Type:     schema.TypeBool,
-				Optional: true,
-			},
-			"proxy_enabled": {
-				Type:     schema.TypeBool,
-				Optional: true,
-			},
-			"proxy_host": {
-				Type:     schema.TypeString,
-				Optional: true,
-			},
-			"hash_secure_attributes": {
-				Type:     schema.TypeBool,
-				Optional: true,
-			},
-			"remote_eval_enabled": {
-				Type:     schema.TypeBool,
-				Optional: true,
-			},
-			"saved_group_references_enabled": {
-				Type:     schema.TypeBool,
-				Optional: true,
-			},
-			// computed
-			"organization": {
-				Type:     schema.TypeString,
-				Computed: true,
-			},
-			"key": {
-				Type:      schema.TypeString,
-				Computed:  true,
-				Sensitive: true,
-			},
-			"proxy_signing_key": {
-				Type:      schema.TypeString,
-				Computed:  true,
-				Sensitive: true,
-			},
-			"sse_enabled": {
-				Type:     schema.TypeBool,
-				Computed: true,
-			},
-			"encryption_key": {
-				Type:      schema.TypeString,
-				Computed:  true,
-				Sensitive: true,
-			},
-			"date_created": {
-				Type:     schema.TypeString,
-				Computed: true,
-			},
-			"date_updated": {
-				Type:     schema.TypeString,
-				Computed: true,
-			},
-		},
-	}
+var _ resource.Resource = &sdkConnectionResource{}
+var _ resource.ResourceWithImportState = &sdkConnectionResource{}
+
+func newSDKConnectionResource() resource.Resource {
+	return &sdkConnectionResource{}
 }
 
-func resourceSDKConnectionCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*growthbookapi.Client)
-	sdkConn := &growthbookapi.SDKConnection{
-		Name:        d.Get("name").(string),
-		Language:    d.Get("language").(string),
-		Environment: d.Get("environment").(string),
-	}
-
-	if v, ok := d.GetOk("sdk_version"); ok {
-		sdkConn.SdkVersion = v.(string)
-	}
-	if v, ok := d.GetOk("projects"); ok {
-		projects := []string{}
-		for _, p := range v.([]interface{}) {
-			projects = append(projects, p.(string))
-		}
-		sdkConn.Projects = projects
-	}
-	if v, ok := d.GetOk("encrypt_payload"); ok {
-		sdkConn.EncryptPayload = v.(bool)
-	}
-	if v, ok := d.GetOk("include_visual_experiments"); ok {
-		sdkConn.IncludeVisualExperiments = v.(bool)
-	}
-	if v, ok := d.GetOk("include_draft_experiments"); ok {
-		sdkConn.IncludeDraftExperiments = v.(bool)
-	}
-	if v, ok := d.GetOk("include_experiment_names"); ok {
-		sdkConn.IncludeExperimentNames = v.(bool)
-	}
-	if v, ok := d.GetOk("include_redirect_experiments"); ok {
-		sdkConn.IncludeRedirectExperiments = v.(bool)
-	}
-	if v, ok := d.GetOk("include_rule_ids"); ok {
-		sdkConn.IncludeRuleIDs = v.(bool)
-	}
-	if v, ok := d.GetOk("proxy_enabled"); ok {
-		sdkConn.ProxyEnabled = v.(bool)
-	}
-	if v, ok := d.GetOk("proxy_host"); ok {
-		sdkConn.ProxyHost = v.(string)
-	}
-	if v, ok := d.GetOk("hash_secure_attributes"); ok {
-		sdkConn.HashSecureAttributes = v.(bool)
-	}
-	if v, ok := d.GetOk("remote_eval_enabled"); ok {
-		sdkConn.RemoteEvalEnabled = v.(bool)
-	}
-	if v, ok := d.GetOk("saved_group_references_enabled"); ok {
-		sdkConn.SavedGroupReferencesEnabled = v.(bool)
-	}
-	created, err := client.CreateSDKConnection(ctx, sdkConn)
-	if err != nil {
-		return diag.Errorf("error creating SDK connection: %s", err)
-	}
-	d.SetId(created.ID)
-
-	return resourceSDKConnectionRead(ctx, d, m)
+type sdkConnectionResource struct {
+	client *growthbookapi.Client
 }
 
-func resourceSDKConnectionRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*growthbookapi.Client)
-	id := d.Id()
-	sdkConn, err := client.GetSDKConnection(ctx, id)
-	if err != nil {
-		return diag.Errorf("error reading SDK connection: %s", err)
-	}
-	d.Set("name", sdkConn.Name)
-	d.Set("language", sdkConn.Language)
-	d.Set("sdk_version", sdkConn.SdkVersion)
-	d.Set("environment", sdkConn.Environment)
-	d.Set("projects", sdkConn.Projects)
-	d.Set("encrypt_payload", sdkConn.EncryptPayload)
-	d.Set("include_visual_experiments", sdkConn.IncludeVisualExperiments)
-	d.Set("include_draft_experiments", sdkConn.IncludeDraftExperiments)
-	d.Set("include_experiment_names", sdkConn.IncludeExperimentNames)
-	d.Set("include_redirect_experiments", sdkConn.IncludeRedirectExperiments)
-	d.Set("include_rule_ids", sdkConn.IncludeRuleIDs)
-	d.Set("proxy_enabled", sdkConn.ProxyEnabled)
-	d.Set("proxy_host", sdkConn.ProxyHost)
-	d.Set("hash_secure_attributes", sdkConn.HashSecureAttributes)
-	d.Set("remote_eval_enabled", sdkConn.RemoteEvalEnabled)
-	d.Set("saved_group_references_enabled", sdkConn.SavedGroupReferencesEnabled)
+type sdkConnectionModel struct {
+	ID                          types.String `tfsdk:"id"`
+	Name                        types.String `tfsdk:"name"`
+	Environment                 types.String `tfsdk:"environment"`
+	Language                    types.String `tfsdk:"language"`
+	SdkVersion                  types.String `tfsdk:"sdk_version"`
+	Projects                    types.List   `tfsdk:"projects"`
+	EncryptPayload              types.Bool   `tfsdk:"encrypt_payload"`
+	IncludeVisualExperiments    types.Bool   `tfsdk:"include_visual_experiments"`
+	IncludeDraftExperiments     types.Bool   `tfsdk:"include_draft_experiments"`
+	IncludeExperimentNames      types.Bool   `tfsdk:"include_experiment_names"`
+	IncludeRedirectExperiments  types.Bool   `tfsdk:"include_redirect_experiments"`
+	IncludeRuleIDs              types.Bool   `tfsdk:"include_rule_ids"`
+	ProxyEnabled                types.Bool   `tfsdk:"proxy_enabled"`
+	ProxyHost                   types.String `tfsdk:"proxy_host"`
+	HashSecureAttributes        types.Bool   `tfsdk:"hash_secure_attributes"`
+	RemoteEvalEnabled           types.Bool   `tfsdk:"remote_eval_enabled"`
+	SavedGroupReferencesEnabled types.Bool   `tfsdk:"saved_group_references_enabled"`
 	// computed
-	d.Set("organization", sdkConn.Organization)
-	d.Set("encryption_key", sdkConn.EncryptionKey)
-	d.Set("key", sdkConn.Key)
-	d.Set("proxy_signing_key", sdkConn.ProxySigningKey)
-	d.Set("sse_enabled", sdkConn.SseEnabled)
-	d.Set("date_created", sdkConn.DateCreated)
-	d.Set("date_updated", sdkConn.DateUpdated)
-
-	return nil
+	Organization    types.String `tfsdk:"organization"`
+	Key             types.String `tfsdk:"key"`
+	ProxySigningKey types.String `tfsdk:"proxy_signing_key"`
+	SseEnabled      types.Bool   `tfsdk:"sse_enabled"`
+	EncryptionKey   types.String `tfsdk:"encryption_key"`
+	DateCreated     types.String `tfsdk:"date_created"`
+	DateUpdated     types.String `tfsdk:"date_updated"`
 }
 
-func resourceSDKConnectionUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*growthbookapi.Client)
-	id := d.Id()
-	sdkConn := &growthbookapi.SDKConnection{
-		Name:        d.Get("name").(string),
-		Language:    d.Get("language").(string),
-		Environment: d.Get("environment").(string),
+func (r *sdkConnectionResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_sdk_connection"
+}
+
+func (r *sdkConnectionResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"id": schema.StringAttribute{
+				Computed: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"name": schema.StringAttribute{
+				Required: true,
+			},
+			"environment": schema.StringAttribute{
+				Required: true,
+			},
+			"language": schema.StringAttribute{
+				Required: true,
+			},
+			"sdk_version": schema.StringAttribute{
+				Optional: true,
+				Computed: true,
+			},
+			"projects": schema.ListAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+				Computed:    true,
+			},
+			"encrypt_payload": schema.BoolAttribute{
+				Optional: true,
+				Computed: true,
+			},
+			"include_visual_experiments": schema.BoolAttribute{
+				Optional: true,
+				Computed: true,
+			},
+			"include_draft_experiments": schema.BoolAttribute{
+				Optional: true,
+				Computed: true,
+			},
+			"include_experiment_names": schema.BoolAttribute{
+				Optional: true,
+				Computed: true,
+			},
+			"include_redirect_experiments": schema.BoolAttribute{
+				Optional: true,
+				Computed: true,
+			},
+			"include_rule_ids": schema.BoolAttribute{
+				Optional: true,
+				Computed: true,
+			},
+			"proxy_enabled": schema.BoolAttribute{
+				Optional: true,
+				Computed: true,
+			},
+			"proxy_host": schema.StringAttribute{
+				Optional: true,
+				Computed: true,
+			},
+			"hash_secure_attributes": schema.BoolAttribute{
+				Optional: true,
+				Computed: true,
+			},
+			"remote_eval_enabled": schema.BoolAttribute{
+				Optional: true,
+				Computed: true,
+			},
+			"saved_group_references_enabled": schema.BoolAttribute{
+				Optional: true,
+				Computed: true,
+			},
+			// computed only
+			"organization": schema.StringAttribute{
+				Computed: true,
+			},
+			"key": schema.StringAttribute{
+				Computed:  true,
+				Sensitive: true,
+			},
+			"proxy_signing_key": schema.StringAttribute{
+				Computed:  true,
+				Sensitive: true,
+			},
+			"sse_enabled": schema.BoolAttribute{
+				Computed: true,
+			},
+			"encryption_key": schema.StringAttribute{
+				Computed:  true,
+				Sensitive: true,
+			},
+			"date_created": schema.StringAttribute{
+				Computed: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"date_updated": schema.StringAttribute{
+				Computed: true,
+			},
+		},
+	}
+}
+
+func (r *sdkConnectionResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+	if req.ProviderData == nil {
+		return
+	}
+	client, ok := req.ProviderData.(*growthbookapi.Client)
+	if !ok {
+		resp.Diagnostics.AddError("Unexpected provider data type", "Expected *growthbookapi.Client")
+		return
+	}
+	r.client = client
+}
+
+func sdkConnToModel(ctx context.Context, conn *growthbookapi.SDKConnection) sdkConnectionModel {
+	return sdkConnectionModel{
+		ID:                          types.StringValue(conn.ID),
+		Name:                        types.StringValue(conn.Name),
+		Language:                    types.StringValue(conn.Language),
+		Environment:                 types.StringValue(conn.Environment),
+		SdkVersion:                  types.StringValue(conn.SdkVersion),
+		Projects:                    stringsToList(ctx, conn.Projects),
+		EncryptPayload:              types.BoolValue(conn.EncryptPayload),
+		IncludeVisualExperiments:    types.BoolValue(conn.IncludeVisualExperiments),
+		IncludeDraftExperiments:     types.BoolValue(conn.IncludeDraftExperiments),
+		IncludeExperimentNames:      types.BoolValue(conn.IncludeExperimentNames),
+		IncludeRedirectExperiments:  types.BoolValue(conn.IncludeRedirectExperiments),
+		IncludeRuleIDs:              types.BoolValue(conn.IncludeRuleIDs),
+		ProxyEnabled:                types.BoolValue(conn.ProxyEnabled),
+		ProxyHost:                   types.StringValue(conn.ProxyHost),
+		HashSecureAttributes:        types.BoolValue(conn.HashSecureAttributes),
+		RemoteEvalEnabled:           types.BoolValue(conn.RemoteEvalEnabled),
+		SavedGroupReferencesEnabled: types.BoolValue(conn.SavedGroupReferencesEnabled),
+		Organization:                types.StringValue(conn.Organization),
+		Key:                         types.StringValue(conn.Key),
+		ProxySigningKey:             types.StringValue(conn.ProxySigningKey),
+		SseEnabled:                  types.BoolValue(conn.SseEnabled),
+		EncryptionKey:               types.StringValue(conn.EncryptionKey),
+		DateCreated:                 types.StringValue(conn.DateCreated),
+		DateUpdated:                 types.StringValue(conn.DateUpdated),
+	}
+}
+
+func sdkConnFromPlan(ctx context.Context, data sdkConnectionModel, projects []string) *growthbookapi.SDKConnection {
+	return &growthbookapi.SDKConnection{
+		Name:                        data.Name.ValueString(),
+		Language:                    data.Language.ValueString(),
+		Environment:                 data.Environment.ValueString(),
+		SdkVersion:                  data.SdkVersion.ValueString(),
+		Projects:                    projects,
+		EncryptPayload:              data.EncryptPayload.ValueBool(),
+		IncludeVisualExperiments:    data.IncludeVisualExperiments.ValueBool(),
+		IncludeDraftExperiments:     data.IncludeDraftExperiments.ValueBool(),
+		IncludeExperimentNames:      data.IncludeExperimentNames.ValueBool(),
+		IncludeRedirectExperiments:  data.IncludeRedirectExperiments.ValueBool(),
+		IncludeRuleIDs:              data.IncludeRuleIDs.ValueBool(),
+		ProxyEnabled:                data.ProxyEnabled.ValueBool(),
+		ProxyHost:                   data.ProxyHost.ValueString(),
+		HashSecureAttributes:        data.HashSecureAttributes.ValueBool(),
+		RemoteEvalEnabled:           data.RemoteEvalEnabled.ValueBool(),
+		SavedGroupReferencesEnabled: data.SavedGroupReferencesEnabled.ValueBool(),
+	}
+}
+
+func (r *sdkConnectionResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	var data sdkConnectionModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
 	}
 
-	if v, ok := d.GetOk("sdk_version"); ok {
-		sdkConn.SdkVersion = v.(string)
-	}
-	if v, ok := d.GetOk("projects"); ok {
-		projects := []string{}
-		for _, p := range v.([]interface{}) {
-			projects = append(projects, p.(string))
+	projects := []string{}
+	if !data.Projects.IsNull() && !data.Projects.IsUnknown() {
+		resp.Diagnostics.Append(data.Projects.ElementsAs(ctx, &projects, false)...)
+		if resp.Diagnostics.HasError() {
+			return
 		}
-		sdkConn.Projects = projects
-	}
-	if v, ok := d.GetOk("encrypt_payload"); ok {
-		sdkConn.EncryptPayload = v.(bool)
-	}
-	if v, ok := d.GetOk("include_visual_experiments"); ok {
-		sdkConn.IncludeVisualExperiments = v.(bool)
-	}
-	if v, ok := d.GetOk("include_draft_experiments"); ok {
-		sdkConn.IncludeDraftExperiments = v.(bool)
-	}
-	if v, ok := d.GetOk("include_experiment_names"); ok {
-		sdkConn.IncludeExperimentNames = v.(bool)
-	}
-	if v, ok := d.GetOk("include_redirect_experiments"); ok {
-		sdkConn.IncludeRedirectExperiments = v.(bool)
-	}
-	if v, ok := d.GetOk("include_rule_ids"); ok {
-		sdkConn.IncludeRuleIDs = v.(bool)
-	}
-	if v, ok := d.GetOk("proxy_enabled"); ok {
-		sdkConn.ProxyEnabled = v.(bool)
-	}
-	if v, ok := d.GetOk("proxy_host"); ok {
-		sdkConn.ProxyHost = v.(string)
-	}
-	if v, ok := d.GetOk("hash_secure_attributes"); ok {
-		sdkConn.HashSecureAttributes = v.(bool)
-	}
-	if v, ok := d.GetOk("remote_eval_enabled"); ok {
-		sdkConn.RemoteEvalEnabled = v.(bool)
-	}
-	if v, ok := d.GetOk("saved_group_references_enabled"); ok {
-		sdkConn.SavedGroupReferencesEnabled = v.(bool)
-	}
-	_, err := client.UpdateSDKConnection(ctx, id, sdkConn)
-	if err != nil {
-		return diag.Errorf("error updating SDK connection: %s", err)
 	}
 
-	return resourceSDKConnectionRead(ctx, d, m)
+	created, err := r.client.CreateSDKConnection(ctx, sdkConnFromPlan(ctx, data, projects))
+	if err != nil {
+		resp.Diagnostics.AddError("Error creating SDK connection", err.Error())
+		return
+	}
+
+	result := sdkConnToModel(ctx, created)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &result)...)
 }
 
-func resourceSDKConnectionDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*growthbookapi.Client)
-	id := d.Id()
-	if err := client.DeleteSDKConnection(ctx, id); err != nil {
-		return diag.Errorf("error deleting SDK connection: %s", err)
+func (r *sdkConnectionResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	var data sdkConnectionModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
 	}
-	d.SetId("")
 
-	return nil
+	conn, err := r.client.GetSDKConnection(ctx, data.ID.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading SDK connection", err.Error())
+		return
+	}
+
+	result := sdkConnToModel(ctx, conn)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &result)...)
+}
+
+func (r *sdkConnectionResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var data sdkConnectionModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	var state sdkConnectionModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	projects := []string{}
+	if !data.Projects.IsNull() && !data.Projects.IsUnknown() {
+		resp.Diagnostics.Append(data.Projects.ElementsAs(ctx, &projects, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+
+	updated, err := r.client.UpdateSDKConnection(ctx, state.ID.ValueString(), sdkConnFromPlan(ctx, data, projects))
+	if err != nil {
+		resp.Diagnostics.AddError("Error updating SDK connection", err.Error())
+		return
+	}
+
+	result := sdkConnToModel(ctx, updated)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &result)...)
+}
+
+func (r *sdkConnectionResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var data sdkConnectionModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if err := r.client.DeleteSDKConnection(ctx, data.ID.ValueString()); err != nil {
+		resp.Diagnostics.AddError("Error deleting SDK connection", err.Error())
+	}
+}
+
+func (r *sdkConnectionResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }

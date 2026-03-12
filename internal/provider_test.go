@@ -8,16 +8,15 @@ import (
 
 	"terraform-provider-growthbook/internal"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework/providerserver"
+	tfprotov6 "github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
 //nolint:gochecknoglobals
-var testAccProviderFactories = map[string]func() (*schema.Provider, error){
-	"growthbook": func() (*schema.Provider, error) { //nolint:unparam
-		return internal.Provider(), nil
-	},
+var testAccProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
+	"growthbook": providerserver.NewProtocol6WithError(internal.New()),
 }
 
 func testAccPreCheck(t *testing.T) {
@@ -28,7 +27,6 @@ func testAccPreCheck(t *testing.T) {
 	}
 }
 
-//nolint:unparam
 func testCheckResourceAttrPrefix(resourceName, attr, prefix string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		rs, ok := s.RootModule().Resources[resourceName]

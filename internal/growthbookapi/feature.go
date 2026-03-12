@@ -6,9 +6,6 @@ import (
 
 // CreateFeature creates a new feature in GrowthBook.
 func (c *Client) CreateFeature(ctx context.Context, f *Feature) (*Feature, error) {
-	if f.Environments == nil {
-		f.Environments = map[string]FeatureEnvironmentConfig{}
-	}
 	if f.Tags == nil {
 		f.Tags = []string{}
 	}
@@ -33,9 +30,6 @@ func (c *Client) GetFeature(ctx context.Context, id string) (*Feature, error) {
 
 // UpdateFeature updates an existing feature by its ID.
 func (c *Client) UpdateFeature(ctx context.Context, id string, f *Feature) (*Feature, error) {
-	if f.Environments == nil {
-		f.Environments = map[string]FeatureEnvironmentConfig{}
-	}
 	if f.Tags == nil {
 		f.Tags = []string{}
 	}

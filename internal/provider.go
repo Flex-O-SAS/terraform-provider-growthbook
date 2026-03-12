@@ -5,112 +5,142 @@ import (
 	"context"
 	"crypto/tls"
 	"net/http"
+	"os"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/provider"
+	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"terraform-provider-growthbook/internal/growthbookapi"
 )
 
-// Provider returns the Terraform provider schema.ResourceProvider for GrowthBook.
-// It defines the provider's configuration schema, sets up the API client, and
-// manages resources and data sources for GrowthBook projects, features, and
-// environments.
-func Provider() *schema.Provider {
-	return &schema.Provider{
-		Schema: map[string]*schema.Schema{
-			"api_key": {
-				Type:        schema.TypeString,
-				Required:    true,
-				DefaultFunc: schema.EnvDefaultFunc("GROWTHBOOK_API_KEY", nil),
-				Description: "The GrowthBook API key.",
-			},
-			"api_url": {
-				Type:        schema.TypeString,
+var _ provider.Provider = &growthbookProvider{}
+
+// New returns a new GrowthBook provider.
+func New() provider.Provider {
+	return &growthbookProvider{}
+}
+
+type growthbookProvider struct{}
+
+type growthbookProviderModel struct {
+	APIKey             types.String `tfsdk:"api_key"`
+	APIURL             types.String `tfsdk:"api_url"`
+	HTTPTimeout        types.Int64  `tfsdk:"http_timeout"`
+	InsecureSkipVerify types.Bool   `tfsdk:"insecure_skip_verify"`
+	RetryMaxAttempts   types.Int64  `tfsdk:"retry_max_attempts"`
+	RetryMinBackoffMs  types.Int64  `tfsdk:"retry_min_backoff_ms"`
+	RetryMaxBackoffMs  types.Int64  `tfsdk:"retry_max_backoff_ms"`
+	QueryLimit         types.Int64  `tfsdk:"query_limit"`
+}
+
+func (p *growthbookProvider) Metadata(_ context.Context, _ provider.MetadataRequest, resp *provider.MetadataResponse) {
+	resp.TypeName = "growthbook"
+}
+
+func (p *growthbookProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"api_key": schema.StringAttribute{
 				Optional:    true,
-				DefaultFunc: schema.EnvDefaultFunc("GROWTHBOOK_API_URL", "https://api.growthbook.io/api/v1"),
-				Description: "The GrowthBook API base URL.",
+				Sensitive:   true,
+				Description: "The GrowthBook API key. Can also be set via GROWTHBOOK_API_KEY env var.",
 			},
-			"http_timeout": {
-				Type:        schema.TypeInt,
+			"api_url": schema.StringAttribute{
 				Optional:    true,
-				Default:     60,
+				Description: "The GrowthBook API base URL. Can also be set via GROWTHBOOK_API_URL env var.",
+			},
+			"http_timeout": schema.Int64Attribute{
+				Optional:    true,
 				Description: "Timeout in seconds for HTTP requests to the GrowthBook API.",
 			},
-			"insecure_skip_verify": {
-				Type:     schema.TypeBool,
+			"insecure_skip_verify": schema.BoolAttribute{
 				Optional: true,
-				Default:  false,
 				Description: "If true, disables SSL certificate verification for GrowthBook API requests " +
 					"(not recommended for production).",
 			},
-			"retry_max_attempts": {
-				Type:        schema.TypeInt,
+			"retry_max_attempts": schema.Int64Attribute{
 				Optional:    true,
-				Default:     5,
 				Description: "Maximum number of retry attempts for transient API errors.",
 			},
-			"retry_min_backoff_ms": {
-				Type:        schema.TypeInt,
+			"retry_min_backoff_ms": schema.Int64Attribute{
 				Optional:    true,
-				Default:     500,
 				Description: "Minimum backoff (in milliseconds) between retries.",
 			},
-			"retry_max_backoff_ms": {
-				Type:        schema.TypeInt,
+			"retry_max_backoff_ms": schema.Int64Attribute{
 				Optional:    true,
-				Default:     5000,
 				Description: "Maximum backoff (in milliseconds) between retries.",
 			},
-			"query_limit": {
-				Type:        schema.TypeInt,
+			"query_limit": schema.Int64Attribute{
 				Optional:    true,
-				Default:     100,
 				Description: "Maximum number of items to fetch per page for paginated API requests.",
 			},
 		},
-		ResourcesMap: map[string]*schema.Resource{
-			"growthbook_project":        resourceProject(),
-			"growthbook_feature":        resourceFeature(),
-			"growthbook_environment":    resourceEnvironment(),
-			"growthbook_sdk_connection": resourceSDKConnection(),
-			"growthbook_attribute":      resourceAttribute(),
-		},
-		DataSourcesMap: map[string]*schema.Resource{
-			"growthbook_project":        dataSourceProject(),
-			"growthbook_environment":    dataSourceEnvironment(),
-			"growthbook_feature":        dataSourceFeature(),
-			"growthbook_sdk_connection": dataSourceSDKConnection(),
-			"growthbook_attribute":      dataSourceAttribute(),
-		},
-		ConfigureContextFunc: configureProvider,
 	}
 }
 
-func configureProvider(_ context.Context, d *schema.ResourceData) (interface{}, diag.Diagnostics) {
-	apiKey := d.Get("api_key").(string)
-	if apiKey == "" {
-		return nil, diag.Diagnostics{
-			diag.Diagnostic{
-				Severity: diag.Error,
-				Summary:  "Missing GrowthBook API key",
-				Detail: "The 'api_key' property must be set in the provider configuration " +
-					"or via the GROWTHBOOK_API_KEY environment variable.",
-			},
-		}
+func (p *growthbookProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
+	var config growthbookProviderModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
 	}
-	baseURL := d.Get("api_url").(string)
-	timeout := d.Get("http_timeout").(int)
-	insecure := d.Get("insecure_skip_verify").(bool)
 
-	retryMaxAttempts := d.Get("retry_max_attempts").(int)
-	retryMinBackoff := d.Get("retry_min_backoff_ms").(int)
-	retryMaxBackoff := d.Get("retry_max_backoff_ms").(int)
-	queryLimit := d.Get("query_limit").(int)
+	apiKey := config.APIKey.ValueString()
+	if apiKey == "" {
+		apiKey = os.Getenv("GROWTHBOOK_API_KEY")
+	}
+	if apiKey == "" {
+		resp.Diagnostics.AddError(
+			"Missing GrowthBook API key",
+			"The 'api_key' property must be set in the provider configuration or via the GROWTHBOOK_API_KEY environment variable.",
+		)
+		return
+	}
+
+	apiURL := config.APIURL.ValueString()
+	if apiURL == "" {
+		apiURL = os.Getenv("GROWTHBOOK_API_URL")
+	}
+	if apiURL == "" {
+		apiURL = "https://api.growthbook.io/api/v1"
+	}
+
+	timeout := int64(60)
+	if !config.HTTPTimeout.IsNull() && !config.HTTPTimeout.IsUnknown() {
+		timeout = config.HTTPTimeout.ValueInt64()
+	}
+
+	insecure := false
+	if !config.InsecureSkipVerify.IsNull() && !config.InsecureSkipVerify.IsUnknown() {
+		insecure = config.InsecureSkipVerify.ValueBool()
+	}
+
+	retryMaxAttempts := int64(5)
+	if !config.RetryMaxAttempts.IsNull() && !config.RetryMaxAttempts.IsUnknown() {
+		retryMaxAttempts = config.RetryMaxAttempts.ValueInt64()
+	}
+
+	retryMinBackoff := int64(500)
+	if !config.RetryMinBackoffMs.IsNull() && !config.RetryMinBackoffMs.IsUnknown() {
+		retryMinBackoff = config.RetryMinBackoffMs.ValueInt64()
+	}
+
+	retryMaxBackoff := int64(5000)
+	if !config.RetryMaxBackoffMs.IsNull() && !config.RetryMaxBackoffMs.IsUnknown() {
+		retryMaxBackoff = config.RetryMaxBackoffMs.ValueInt64()
+	}
+
+	queryLimit := int64(100)
+	if !config.QueryLimit.IsNull() && !config.QueryLimit.IsUnknown() {
+		queryLimit = config.QueryLimit.ValueInt64()
+	}
 
 	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: insecure},
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: insecure}, //nolint:gosec
 	}
 	httpClient := &http.Client{
 		Timeout:   time.Duration(timeout) * time.Second,
@@ -118,17 +148,38 @@ func configureProvider(_ context.Context, d *schema.ResourceData) (interface{}, 
 	}
 
 	client := growthbookapi.NewClient(
-		baseURL,
+		apiURL,
 		apiKey,
 		growthbookapi.WithHTTPClient(httpClient),
 		growthbookapi.WithBackoff(growthbookapi.BackoffConfig{
-			MaxRetries:      retryMaxAttempts,
+			MaxRetries:      int(retryMaxAttempts),
 			InitialInterval: time.Duration(retryMinBackoff) * time.Millisecond,
 			Multiplier:      2.0,
 			MaxInterval:     time.Duration(retryMaxBackoff) * time.Millisecond,
 		}),
-		growthbookapi.WithPageLimit(queryLimit),
+		growthbookapi.WithPageLimit(int(queryLimit)),
 	)
 
-	return client, nil
+	resp.DataSourceData = client
+	resp.ResourceData = client
+}
+
+func (p *growthbookProvider) Resources(_ context.Context) []func() resource.Resource {
+	return []func() resource.Resource{
+		newProjectResource,
+		newFeatureResource,
+		newEnvironmentResource,
+		newSDKConnectionResource,
+		newAttributeResource,
+	}
+}
+
+func (p *growthbookProvider) DataSources(_ context.Context) []func() datasource.DataSource {
+	return []func() datasource.DataSource{
+		newProjectDataSource,
+		newEnvironmentDataSource,
+		newFeatureDataSource,
+		newSDKConnectionDataSource,
+		newAttributeDataSource,
+	}
 }

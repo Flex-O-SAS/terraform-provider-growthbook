@@ -3,72 +3,99 @@ package internal
 import (
 	"context"
 
-	"terraform-provider-growthbook/internal/growthbookapi"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"terraform-provider-growthbook/internal/growthbookapi"
 )
 
-func dataSourceAttribute() *schema.Resource {
-	return &schema.Resource{
-		ReadContext: dataSourceAttributeRead,
-		Schema: map[string]*schema.Schema{
-			"property": &schema.Schema{
-				Type:     schema.TypeString,
+var _ datasource.DataSource = &attributeDataSource{}
+
+func newAttributeDataSource() datasource.DataSource {
+	return &attributeDataSource{}
+}
+
+type attributeDataSource struct {
+	client *growthbookapi.Client
+}
+
+type attributeDataModel struct {
+	Property    types.String `tfsdk:"property"`
+	DataType    types.String `tfsdk:"datatype"`
+	Format      types.String `tfsdk:"format"`
+	EnumValues  types.String `tfsdk:"enum_values"`
+	Projects    types.List   `tfsdk:"projects"`
+	Archived    types.Bool   `tfsdk:"archived"`
+	Description types.String `tfsdk:"description"`
+}
+
+func (d *attributeDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_attribute"
+}
+
+func (d *attributeDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"property": schema.StringAttribute{
 				Required: true,
 			},
-			"datatype": &schema.Schema{
-				Type:     schema.TypeString,
+			"datatype": schema.StringAttribute{
 				Computed: true,
 			},
-			"format": &schema.Schema{
-				Type:     schema.TypeString,
+			"format": schema.StringAttribute{
 				Computed: true,
 			},
-			"enum_values": &schema.Schema{
-				Type:     schema.TypeString,
+			"enum_values": schema.StringAttribute{
 				Computed: true,
 			},
-			"projects": &schema.Schema{
-				Type: schema.TypeList,
-				Elem: &schema.Schema{
-					Type: schema.TypeString,
-				},
+			"projects": schema.ListAttribute{
+				ElementType: types.StringType,
 				Computed:    true,
-				Description: "Array of project Id",
+				Description: "Array of project IDs.",
 			},
-			"archived": &schema.Schema{
-				Type:     schema.TypeBool,
+			"archived": schema.BoolAttribute{
 				Computed: true,
 			},
-			"description": &schema.Schema{
-				Type:     schema.TypeString,
+			"description": schema.StringAttribute{
 				Computed: true,
 			},
 		},
 	}
 }
 
-func dataSourceAttributeRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*growthbookapi.Client)
-	property := d.Get("property").(string)
-	attribute, err := client.GetAttribute(ctx, property)
-	if err != nil {
-		return diag.Diagnostics{
-			diag.Diagnostic{
-				Severity: diag.Error,
-				Summary:  "Unable to find GrowthBook attribute by property",
-				Detail:   err.Error(),
-			},
-		}
+func (d *attributeDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
+	if req.ProviderData == nil {
+		return
 	}
-	d.SetId(attribute.Property)
-	d.Set("property", attribute.Property)
-	d.Set("datatype", attribute.DataType)
-	d.Set("format", attribute.Format)
-	d.Set("enum_values", attribute.EnumValues)
-	d.Set("projects", attribute.Projects)
-	d.Set("archived", attribute.Archived)
-	d.Set("description", attribute.Description)
-	return nil
+	client, ok := req.ProviderData.(*growthbookapi.Client)
+	if !ok {
+		resp.Diagnostics.AddError("Unexpected provider data type", "Expected *growthbookapi.Client")
+		return
+	}
+	d.client = client
+}
+
+func (d *attributeDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
+	var data attributeDataModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	attribute, err := d.client.GetAttribute(ctx, data.Property.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to find GrowthBook attribute by property", err.Error())
+		return
+	}
+
+	data.Property = types.StringValue(attribute.Property)
+	data.DataType = types.StringValue(attribute.DataType)
+	data.Format = types.StringValue(attribute.Format)
+	data.EnumValues = types.StringValue(attribute.EnumValues)
+	data.Projects = stringsToList(ctx, attribute.Projects)
+	data.Archived = types.BoolValue(attribute.Archived)
+	data.Description = types.StringValue(attribute.Description)
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }

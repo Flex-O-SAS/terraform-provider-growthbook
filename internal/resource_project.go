@@ -2,115 +2,188 @@ package internal
 
 import (
 	"context"
-	"terraform-provider-growthbook/internal/growthbookapi"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"terraform-provider-growthbook/internal/growthbookapi"
 )
 
-func resourceProject() *schema.Resource {
-	return &schema.Resource{
-		CreateContext: resourceProjectCreate,
-		ReadContext:   resourceProjectRead,
-		UpdateContext: resourceProjectUpdate,
-		DeleteContext: resourceProjectDelete,
-		Importer: &schema.ResourceImporter{
-			StateContext: schema.ImportStatePassthroughContext,
-		},
-		Schema: map[string]*schema.Schema{
-			"id": {
-				Type:     schema.TypeString,
+var _ resource.Resource = &projectResource{}
+var _ resource.ResourceWithImportState = &projectResource{}
+
+func newProjectResource() resource.Resource {
+	return &projectResource{}
+}
+
+type projectResource struct {
+	client *growthbookapi.Client
+}
+
+type projectModel struct {
+	ID          types.String `tfsdk:"id"`
+	Name        types.String `tfsdk:"name"`
+	Description types.String `tfsdk:"description"`
+	StatsEngine types.String `tfsdk:"stats_engine"`
+	DateCreated types.String `tfsdk:"date_created"`
+	DateUpdated types.String `tfsdk:"date_updated"`
+}
+
+func (r *projectResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_project"
+}
+
+func (r *projectResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"id": schema.StringAttribute{
 				Computed: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
-			"name": {
-				Type:     schema.TypeString,
+			"name": schema.StringAttribute{
 				Required: true,
 			},
-			"description": {
-				Type:     schema.TypeString,
+			"description": schema.StringAttribute{
 				Optional: true,
-			},
-			"stats_engine": {
-				Type:     schema.TypeString,
-				Optional: true,
-			},
-			"date_created": {
-				Type:     schema.TypeString,
 				Computed: true,
 			},
-			"date_updated": {
-				Type:     schema.TypeString,
+			"stats_engine": schema.StringAttribute{
+				Optional: true,
+				Computed: true,
+			},
+			"date_created": schema.StringAttribute{
+				Computed: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"date_updated": schema.StringAttribute{
 				Computed: true,
 			},
 		},
 	}
 }
 
-func resourceProjectCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*growthbookapi.Client)
+func (r *projectResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+	if req.ProviderData == nil {
+		return
+	}
+	client, ok := req.ProviderData.(*growthbookapi.Client)
+	if !ok {
+		resp.Diagnostics.AddError("Unexpected provider data type", "Expected *growthbookapi.Client")
+		return
+	}
+	r.client = client
+}
+
+func (r *projectResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	var data projectModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	project := &growthbookapi.Project{
-		Name:        d.Get("name").(string),
-		Description: d.Get("description").(string),
+		Name:        data.Name.ValueString(),
+		Description: data.Description.ValueString(),
 	}
-	if v, ok := d.GetOk("stats_engine"); ok {
-		project.Settings.StatsEngine = v.(string)
+	if !data.StatsEngine.IsNull() && !data.StatsEngine.IsUnknown() {
+		project.Settings.StatsEngine = data.StatsEngine.ValueString()
 	}
-	created, err := client.CreateProject(ctx, project)
-	if err != nil {
-		return diag.Errorf("error creating project: %v", err)
-	}
-	d.SetId(created.ID)
 
-	return resourceProjectRead(ctx, d, m)
+	created, err := r.client.CreateProject(ctx, project)
+	if err != nil {
+		resp.Diagnostics.AddError("Error creating project", err.Error())
+		return
+	}
+
+	data.ID = types.StringValue(created.ID)
+	data.Name = types.StringValue(created.Name)
+	data.Description = types.StringValue(created.Description)
+	data.StatsEngine = types.StringValue(created.Settings.StatsEngine)
+	data.DateCreated = types.StringValue(created.DateCreated)
+	data.DateUpdated = types.StringValue(created.DateUpdated)
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func resourceProjectRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*growthbookapi.Client)
-	id := d.Id()
-	project, err := client.GetProject(ctx, id)
-	if err != nil {
-		return diag.Errorf("error reading project: %v", err)
+func (r *projectResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	var data projectModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
 	}
-	d.Set("name", project.Name)
-	d.Set("description", project.Description)
-	if project.Settings.StatsEngine != "" {
-		d.Set("stats_engine", project.Settings.StatsEngine)
-	}
-	d.Set("date_created", project.DateCreated)
-	d.Set("date_updated", project.DateUpdated)
 
-	return nil
+	project, err := r.client.GetProject(ctx, data.ID.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading project", err.Error())
+		return
+	}
+
+	data.Name = types.StringValue(project.Name)
+	data.Description = types.StringValue(project.Description)
+	data.StatsEngine = types.StringValue(project.Settings.StatsEngine)
+	data.DateCreated = types.StringValue(project.DateCreated)
+	data.DateUpdated = types.StringValue(project.DateUpdated)
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func resourceProjectUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*growthbookapi.Client)
-	id := d.Id()
-	if d.Get("name").(string) == "" {
-		return diag.Errorf("Name must be provided for the project.")
+func (r *projectResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var data projectModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
 	}
+
+	var state projectModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	project := &growthbookapi.Project{
-		Name:        d.Get("name").(string),
-		Description: d.Get("description").(string),
+		Name:        data.Name.ValueString(),
+		Description: data.Description.ValueString(),
 	}
-	if v, ok := d.GetOk("stats_engine"); ok {
-		project.Settings.StatsEngine = v.(string)
+	if !data.StatsEngine.IsNull() && !data.StatsEngine.IsUnknown() {
+		project.Settings.StatsEngine = data.StatsEngine.ValueString()
 	}
-	updated, err := client.UpdateProject(ctx, id, project)
-	if err != nil {
-		return diag.Errorf("error updating project: %v", err)
-	}
-	d.Set("date_updated", updated.DateUpdated)
 
-	return resourceProjectRead(ctx, d, m)
+	updated, err := r.client.UpdateProject(ctx, state.ID.ValueString(), project)
+	if err != nil {
+		resp.Diagnostics.AddError("Error updating project", err.Error())
+		return
+	}
+
+	data.ID = state.ID
+	data.Name = types.StringValue(updated.Name)
+	data.Description = types.StringValue(updated.Description)
+	data.StatsEngine = types.StringValue(updated.Settings.StatsEngine)
+	data.DateCreated = state.DateCreated
+	data.DateUpdated = types.StringValue(updated.DateUpdated)
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func resourceProjectDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*growthbookapi.Client)
-	id := d.Id()
-	if err := client.DeleteProject(ctx, id); err != nil {
-		return diag.Errorf("Failed to delete project: %s", err)
+func (r *projectResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var data projectModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
 	}
-	d.SetId("")
 
-	return nil
+	if err := r.client.DeleteProject(ctx, data.ID.ValueString()); err != nil {
+		resp.Diagnostics.AddError("Error deleting project", err.Error())
+	}
+}
+
+func (r *projectResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }

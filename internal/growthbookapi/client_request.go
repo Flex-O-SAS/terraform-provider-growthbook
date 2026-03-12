@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -33,6 +34,11 @@ var (
 		"DELETE": deleteStatuses,
 		"PATCH":  updateStatuses,
 	}
+	// globalWriteMu serializes all mutating API requests across all Client instances.
+	// GrowthBook stores some resources (attributes, environments) as arrays and performs
+	// read-modify-write internally, causing data loss under concurrent writes.
+	//nolint:gochecknoglobals
+	globalWriteMu sync.Mutex
 )
 
 func checkStatuses(method string, resp *http.Response) error {
@@ -72,9 +78,13 @@ func decodeResultKey[T any](m map[string]any, key string) (T, error) {
 	return out, nil
 }
 
-//
 // 1. read response bod for logging purposes, replace it with NopCloser buffer.
 func (c *Client) do(ctx context.Context, method, path string, body any) (*http.Response, error) {
+	if method != "GET" {
+		globalWriteMu.Lock()
+		defer globalWriteMu.Unlock()
+	}
+
 	var buf io.Reader
 	var bodyLog string
 
@@ -158,7 +168,6 @@ func (c *Client) retryAfter(
 	return interval
 }
 
-//
 // 1. success or non-retryable error, exit reties and return.
 // 2. close response body as it won't be closed by caller.
 func (c *Client) withRetry(ctx context.Context, method, url string, buf io.Reader) (*http.Response, error) {
@@ -193,7 +202,7 @@ func (c *Client) withRetry(ctx context.Context, method, url string, buf io.Reade
 
 		attempt++
 		tflog.Warn(ctx, "Transient error, retrying request", map[string]any{
-			"attempt": attempt,
+			"attempt":     attempt,
 			"interval_ms": interval.Milliseconds(),
 			"status": func() int {
 				if resp != nil {

@@ -2,153 +2,215 @@ package internal
 
 import (
 	"context"
-	"terraform-provider-growthbook/internal/growthbookapi"
-
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"slices"
-	"sync"
+
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"terraform-provider-growthbook/internal/growthbookapi"
 )
 
-var attributeMutex sync.Mutex
+var _ resource.Resource = &attributeResource{}
+var _ resource.ResourceWithImportState = &attributeResource{}
 
-func resourceAttribute() *schema.Resource {
-	return &schema.Resource{
-		CreateContext: resourceAttributeCreate,
-		ReadContext:   resourceAttributeRead,
-		UpdateContext: resourceAttributeUpdate,
-		DeleteContext: resourceAttributeDelete,
+func newAttributeResource() resource.Resource {
+	return &attributeResource{}
+}
 
-		Importer: &schema.ResourceImporter{
-			StateContext: schema.ImportStatePassthroughContext,
-		},
-		Schema: map[string]*schema.Schema{
-			"property": &schema.Schema{
-				Type:     schema.TypeString,
+type attributeResource struct {
+	client *growthbookapi.Client
+}
+
+type attributeModel struct {
+	Property    types.String `tfsdk:"property"`
+	DataType    types.String `tfsdk:"datatype"`
+	Format      types.String `tfsdk:"format"`
+	EnumValues  types.String `tfsdk:"enum_values"`
+	Projects    types.List   `tfsdk:"projects"`
+	Archived    types.Bool   `tfsdk:"archived"`
+	Description types.String `tfsdk:"description"`
+}
+
+func (r *attributeResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_attribute"
+}
+
+func (r *attributeResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"property": schema.StringAttribute{
 				Required: true,
 			},
-			"datatype": &schema.Schema{
-				Type:     schema.TypeString,
+			"datatype": schema.StringAttribute{
 				Required: true,
 			},
-			"format": &schema.Schema{
-				Type:     schema.TypeString,
+			"format": schema.StringAttribute{
 				Optional: true,
+				Computed: true,
 			},
-			"enum_values": &schema.Schema{
-				Type:     schema.TypeString,
+			"enum_values": schema.StringAttribute{
 				Optional: true,
+				Computed: true,
 			},
-			"projects": &schema.Schema{
-				Type: schema.TypeList,
-				Elem: &schema.Schema{
-					Type: schema.TypeString,
-				},
+			"projects": schema.ListAttribute{
+				ElementType: types.StringType,
 				Optional:    true,
-				Description: "Array of project Id",
+				Computed:    true,
+				Description: "Array of project IDs.",
 			},
-			"archived": &schema.Schema{
-				Type:     schema.TypeBool,
+			"archived": schema.BoolAttribute{
 				Optional: true,
+				Computed: true,
 			},
-			"description": &schema.Schema{
-				Type:     schema.TypeString,
+			"description": schema.StringAttribute{
 				Optional: true,
+				Computed: true,
 			},
 		},
 	}
 }
 
-func resourceAttributeRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*growthbookapi.Client)
-	property := d.Id()
-	out, err := client.GetAttribute(ctx, property)
+func (r *attributeResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+	if req.ProviderData == nil {
+		return
+	}
+	client, ok := req.ProviderData.(*growthbookapi.Client)
+	if !ok {
+		resp.Diagnostics.AddError("Unexpected provider data type", "Expected *growthbookapi.Client")
+		return
+	}
+	r.client = client
+}
+
+var validFormats = []string{"", "version", "date", "isoCountryCode"}
+
+func (r *attributeResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	var data attributeModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	format := data.Format.ValueString()
+	if !slices.Contains(validFormats, format) {
+		resp.Diagnostics.AddError(
+			"Invalid format value",
+			"Expected '' | 'version' | 'date' | 'isoCountryCode', received: "+format,
+		)
+		return
+	}
+
+	projects := []string{}
+	if !data.Projects.IsNull() && !data.Projects.IsUnknown() {
+		resp.Diagnostics.Append(data.Projects.ElementsAs(ctx, &projects, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+
+	attribute := &growthbookapi.Attribute{
+		Property:    data.Property.ValueString(),
+		DataType:    data.DataType.ValueString(),
+		Format:      format,
+		EnumValues:  data.EnumValues.ValueString(),
+		Projects:    projects,
+		Archived:    data.Archived.ValueBool(),
+		Description: data.Description.ValueString(),
+	}
+
+	created, err := r.client.CreateAttribute(ctx, attribute)
 	if err != nil {
-		return diag.Errorf("error reading attribute: %v", err)
+		resp.Diagnostics.AddError("Error creating attribute", err.Error())
+		return
+	}
+
+	data.Property = types.StringValue(created.Property)
+	data.DataType = types.StringValue(created.DataType)
+	data.Format = types.StringValue(created.Format)
+	data.EnumValues = types.StringValue(created.EnumValues)
+	data.Projects = stringsToList(ctx, created.Projects)
+	data.Archived = types.BoolValue(created.Archived)
+	data.Description = types.StringValue(created.Description)
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+}
+
+func (r *attributeResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	var data attributeModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	out, err := r.client.GetAttribute(ctx, data.Property.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading attribute", err.Error())
+		return
 	}
 	if out == nil {
-		return diag.Errorf("error reading attribute: %v", property)
+		resp.Diagnostics.AddError("Attribute not found", "Attribute with property '"+data.Property.ValueString()+"' was not found.")
+		return
 	}
-	d.Set("property", out.Property)
-	d.Set("datatype", out.DataType)
-	d.Set("format", out.Format)
-	d.Set("enum_values", out.EnumValues)
-	d.Set("projects", out.Projects)
-	d.Set("archived", out.Archived)
-	d.Set("description", out.Description)
-	return nil
+
+	data.Property = types.StringValue(out.Property)
+	data.DataType = types.StringValue(out.DataType)
+	data.Format = types.StringValue(out.Format)
+	data.EnumValues = types.StringValue(out.EnumValues)
+	data.Projects = stringsToList(ctx, out.Projects)
+	data.Archived = types.BoolValue(out.Archived)
+	data.Description = types.StringValue(out.Description)
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func resourceAttributeCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*growthbookapi.Client)
+func (r *attributeResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var data attributeModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	projects := []string{}
+	if !data.Projects.IsNull() && !data.Projects.IsUnknown() {
+		resp.Diagnostics.Append(data.Projects.ElementsAs(ctx, &projects, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+
 	attribute := &growthbookapi.Attribute{
-		Property:    d.Get("property").(string),
-		DataType:    d.Get("datatype").(string),
-		Format:      d.Get("format").(string),
-		EnumValues:  d.Get("enum_values").(string),
-		Projects:    retrieveStrings(d.Get("projects").([]interface{})),
-		Archived:    d.Get("archived").(bool),
-		Description: d.Get("description").(string),
+		Property:    data.Property.ValueString(),
+		DataType:    data.DataType.ValueString(),
+		Format:      data.Format.ValueString(),
+		EnumValues:  data.EnumValues.ValueString(),
+		Projects:    projects,
+		Archived:    data.Archived.ValueBool(),
+		Description: data.Description.ValueString(),
 	}
 
-	FormatAcceptedValue := []string{"", "version", "date", "isoCountryCode"}
-	if slices.Contains(FormatAcceptedValue, attribute.Format) == false {
-		return diag.Errorf("[format] Invalid value. Expected '' | 'version' | 'date' | 'isoCountryCode', received %v", attribute.Format)
-	}
-
-	// GrowthBook does not handle concurrent attribute creation properly and may enter a data race state.
-	// To prevent this issue, we enforce serialized execution using a mutex, ensuring attributes are created sequentially.
-	attributeMutex.Lock()
-	defer attributeMutex.Unlock()
-	created, err := client.CreateAttribute(ctx, attribute)
-
+	_, err := r.client.UpdateAttribute(ctx, attribute.Property, attribute)
 	if err != nil {
-		return diag.Errorf("error creating attribute %v %v", err, created)
+		resp.Diagnostics.AddError("Error updating attribute", err.Error())
+		return
 	}
-	d.SetId(created.Property)
-	return resourceAttributeRead(ctx, d, m)
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func resourceAttributeUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*growthbookapi.Client)
-	attribute := &growthbookapi.Attribute{
-		Property:    d.Get("property").(string),
-		DataType:    d.Get("datatype").(string),
-		Format:      d.Get("format").(string),
-		EnumValues:  d.Get("enum_values").(string),
-		Projects:    retrieveStrings(d.Get("projects").([]interface{})),
-		Archived:    d.Get("archived").(bool),
-		Description: d.Get("description").(string),
+func (r *attributeResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var data attributeModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
 	}
-	_, err := client.UpdateAttribute(ctx, attribute.Property, attribute)
-	if err != nil {
-		return diag.Errorf("error updating attribute: %v", err)
+
+	if err := r.client.DeleteAttribute(ctx, data.Property.ValueString()); err != nil {
+		resp.Diagnostics.AddError("Error deleting attribute", err.Error())
 	}
-	return resourceAttributeRead(ctx, d, m)
 }
 
-func resourceAttributeDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*growthbookapi.Client)
-	attribute := &growthbookapi.Attribute{
-		Property:    d.Get("property").(string),
-		DataType:    d.Get("datatype").(string),
-		Format:      d.Get("format").(string),
-		EnumValues:  d.Get("enum_values").(string),
-		Projects:    retrieveStrings(d.Get("projects").([]interface{})),
-		Archived:    d.Get("archived").(bool),
-		Description: d.Get("description").(string),
-	}
-	if err := client.DeleteAttribute(ctx, attribute.Property); err != nil {
-		return diag.Errorf("Failed to delete attribute: %s", err)
-	}
-	d.SetId("")
-	return nil
-}
-
-func retrieveStrings(p []interface{}) []string {
-	projects := make([]string, len(p))
-	for i := 0; i < len(p); i++ {
-		projects[i] = p[i].(string)
-	}
-	return projects
+func (r *attributeResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	resource.ImportStatePassthroughID(ctx, path.Root("property"), req, resp)
 }

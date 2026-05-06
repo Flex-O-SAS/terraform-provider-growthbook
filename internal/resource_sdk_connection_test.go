@@ -36,7 +36,7 @@ func TestAccGrowthBookSDKConnection_basic(t *testing.T) {
 	connName := acctest.RandomWithPrefix("tf-acc-sdkconn-")
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:          func() { testAccPreCheck(t) },
+		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProviderFactories,
 		Steps: []resource.TestStep{
 			{

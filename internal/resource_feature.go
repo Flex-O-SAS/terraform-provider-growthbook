@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"errors"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -350,6 +351,10 @@ func (r *featureResource) Read(ctx context.Context, req resource.ReadRequest, re
 
 	feature, err := r.client.GetFeature(ctx, data.ID.ValueString())
 	if err != nil {
+		if errors.Is(err, growthbookapi.ErrNotFound) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Error reading feature", err.Error())
 		return
 	}
@@ -447,8 +452,8 @@ func featureModelFromAPI(ctx context.Context, m *featureModel, f *growthbookapi.
 	m.Project = types.StringValue(f.Project)
 	m.ValueType = types.StringValue(f.ValueType)
 	m.DefaultValue = types.StringValue(f.DefaultValue)
-	m.Tags = stringsToList(ctx, f.Tags)
-	m.Prerequisites = stringsToList(ctx, f.Prerequisites)
+	m.Tags = stringsToList(f.Tags)
+	m.Prerequisites = stringsToList(f.Prerequisites)
 
 	envsMap := envsFromAPI(f.Environments)
 	var d diag.Diagnostics

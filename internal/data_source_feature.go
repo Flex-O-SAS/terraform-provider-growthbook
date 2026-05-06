@@ -49,13 +49,13 @@ func featureDataEnvironmentSchemaAttr() schema.MapNestedAttribute {
 					Computed: true,
 					NestedObject: schema.NestedAttributeObject{
 						Attributes: map[string]schema.Attribute{
-							"id":          schema.StringAttribute{Computed: true},
-							"type":        schema.StringAttribute{Computed: true},
-							"enabled":     schema.BoolAttribute{Computed: true},
-							"description": schema.StringAttribute{Computed: true},
-							"condition":   schema.StringAttribute{Computed: true},
-							"value":       schema.StringAttribute{Computed: true},
-							"coverage":    schema.Float64Attribute{Computed: true},
+							"id":             schema.StringAttribute{Computed: true},
+							"type":           schema.StringAttribute{Computed: true},
+							"enabled":        schema.BoolAttribute{Computed: true},
+							"description":    schema.StringAttribute{Computed: true},
+							"condition":      schema.StringAttribute{Computed: true},
+							"value":          schema.StringAttribute{Computed: true},
+							"coverage":       schema.Float64Attribute{Computed: true},
 							"hash_attribute": schema.StringAttribute{Computed: true},
 							"experiment_id":  schema.StringAttribute{Computed: true},
 							"variations": schema.ListNestedAttribute{
@@ -158,8 +158,8 @@ func (d *featureDataSource) Read(ctx context.Context, req datasource.ReadRequest
 	data.Project = types.StringValue(feature.Project)
 	data.ValueType = types.StringValue(feature.ValueType)
 	data.DefaultValue = types.StringValue(feature.DefaultValue)
-	data.Tags = stringsToList(ctx, feature.Tags)
-	data.Prerequisites = stringsToList(ctx, feature.Prerequisites)
+	data.Tags = stringsToList(feature.Tags)
+	data.Prerequisites = stringsToList(feature.Prerequisites)
 
 	envsMap := envsFromAPI(feature.Environments)
 	var envDiags diag.Diagnostics

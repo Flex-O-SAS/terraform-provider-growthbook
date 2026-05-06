@@ -2,8 +2,8 @@ package internal
 
 import (
 	"context"
+	"errors"
 
-	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -119,7 +119,7 @@ func (r *environmentResource) Create(ctx context.Context, req resource.CreateReq
 	data.Description = types.StringValue(created.Description)
 	data.ToggleOnList = types.BoolValue(created.ToggleOnList)
 	data.DefaultState = types.BoolValue(created.DefaultState)
-	data.Projects = stringsToList(ctx, created.Projects)
+	data.Projects = stringsToList(created.Projects)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -133,6 +133,10 @@ func (r *environmentResource) Read(ctx context.Context, req resource.ReadRequest
 
 	env, err := r.client.FindEnvironmentByID(ctx, data.ID.ValueString())
 	if err != nil {
+		if errors.Is(err, growthbookapi.ErrNotFound) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Error reading environment", err.Error())
 		return
 	}
@@ -141,7 +145,7 @@ func (r *environmentResource) Read(ctx context.Context, req resource.ReadRequest
 	data.Description = types.StringValue(env.Description)
 	data.ToggleOnList = types.BoolValue(env.ToggleOnList)
 	data.DefaultState = types.BoolValue(env.DefaultState)
-	data.Projects = stringsToList(ctx, env.Projects)
+	data.Projects = stringsToList(env.Projects)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -197,15 +201,4 @@ func (r *environmentResource) Delete(ctx context.Context, req resource.DeleteReq
 
 func (r *environmentResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
-}
-
-// stringsToList converts a []string to a types.List of strings.
-// Since elements are always valid strings, this never returns an error.
-func stringsToList(_ context.Context, ss []string) types.List {
-	elems := make([]attr.Value, len(ss))
-	for i, s := range ss {
-		elems[i] = types.StringValue(s)
-	}
-	list, _ := types.ListValue(types.StringType, elems)
-	return list
 }

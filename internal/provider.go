@@ -171,6 +171,14 @@ func (p *growthbookProvider) Resources(_ context.Context) []func() resource.Reso
 		newEnvironmentResource,
 		newSDKConnectionResource,
 		newAttributeResource,
+		newSavedGroupResource,
+		newSegmentResource,
+		newMetricResource,
+		newDimensionResource,
+		newFactTableResource,
+		newFactMetricResource,
+		newNamespaceResource,
+		newExperimentResource,
 	}
 }
 
@@ -181,5 +189,14 @@ func (p *growthbookProvider) DataSources(_ context.Context) []func() datasource.
 		newFeatureDataSource,
 		newSDKConnectionDataSource,
 		newAttributeDataSource,
+		newSavedGroupDataSource,
+		newSegmentDataSource,
+		newMetricDataSource,
+		newDimensionDataSource,
+		newFactTableDataSource,
+		newFactMetricDataSource,
+		newNamespaceDataSource,
+		newExperimentDataSource,
+		newDataSourceDataSource,
 	}
 }

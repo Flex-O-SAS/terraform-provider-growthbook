@@ -50,14 +50,34 @@ type FeatureRule struct {
 	Condition   string `json:"condition,omitempty"`
 	// force / rollout
 	Value string `json:"value,omitempty"`
-	// rollout only
-	Coverage      *float64 `json:"coverage,omitempty"`
-	HashAttribute string   `json:"hashAttribute,omitempty"`
+	// rollout / experiment
+	Coverage          *float64              `json:"coverage,omitempty"`
+	HashAttribute     string                `json:"hashAttribute,omitempty"`
+	FallbackAttribute string                `json:"fallbackAttribute,omitempty"`
+	HashVersion       *int                  `json:"hashVersion,omitempty"`
+	Seed              string                `json:"seed,omitempty"`
+	Namespace         *FeatureNamespace     `json:"namespace,omitempty"`
+	TrackingKey       string                `json:"trackingKey,omitempty"`
+	ScheduleRules     []FeatureScheduleRule `json:"scheduleRules,omitempty"`
+	ScheduleType      string                `json:"scheduleType,omitempty"`
 	// experiment-ref only
 	ExperimentID        string                       `json:"experimentId,omitempty"`
 	Variations          []FeatureVariation           `json:"variations,omitempty"`
 	SavedGroupTargeting []FeatureSavedGroupTargeting `json:"savedGroupTargeting,omitempty"`
 	Prerequisites       []FeaturePrerequisite        `json:"prerequisites,omitempty"`
+}
+
+// FeatureNamespace represents a traffic namespace for a rule.
+type FeatureNamespace struct {
+	Enabled bool       `json:"enabled"`
+	Name    string     `json:"name"`
+	Range   [2]float64 `json:"range,omitempty"`
+}
+
+// FeatureScheduleRule represents a time-based schedule entry for a rule.
+type FeatureScheduleRule struct {
+	Timestamp *string `json:"timestamp"`
+	Enabled   bool    `json:"enabled"`
 }
 
 // FeatureVariation represents a single variation in an experiment-ref rule.

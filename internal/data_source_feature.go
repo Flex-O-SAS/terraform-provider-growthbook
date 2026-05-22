@@ -49,15 +49,40 @@ func featureDataEnvironmentSchemaAttr() schema.MapNestedAttribute {
 					Computed: true,
 					NestedObject: schema.NestedAttributeObject{
 						Attributes: map[string]schema.Attribute{
-							"id":             schema.StringAttribute{Computed: true},
-							"type":           schema.StringAttribute{Computed: true},
-							"enabled":        schema.BoolAttribute{Computed: true},
-							"description":    schema.StringAttribute{Computed: true},
-							"condition":      schema.StringAttribute{Computed: true},
-							"value":          schema.StringAttribute{Computed: true},
-							"coverage":       schema.Float64Attribute{Computed: true},
-							"hash_attribute": schema.StringAttribute{Computed: true},
-							"experiment_id":  schema.StringAttribute{Computed: true},
+							"id":                schema.StringAttribute{Computed: true},
+							"type":              schema.StringAttribute{Computed: true},
+							"enabled":           schema.BoolAttribute{Computed: true},
+							"description":       schema.StringAttribute{Computed: true},
+							"condition":         schema.StringAttribute{Computed: true},
+							"value":             schema.StringAttribute{Computed: true},
+							"coverage":          schema.Float64Attribute{Computed: true},
+							"hash_attribute":    schema.StringAttribute{Computed: true},
+							"fallback_attribute": schema.StringAttribute{Computed: true},
+							"hash_version":      schema.Int64Attribute{Computed: true},
+							"seed":              schema.StringAttribute{Computed: true},
+							"tracking_key":      schema.StringAttribute{Computed: true},
+							"schedule_type":     schema.StringAttribute{Computed: true},
+							"namespace": schema.ListNestedAttribute{
+								Computed: true,
+								NestedObject: schema.NestedAttributeObject{
+									Attributes: map[string]schema.Attribute{
+										"enabled":     schema.BoolAttribute{Computed: true},
+										"name":        schema.StringAttribute{Computed: true},
+										"range_start": schema.Float64Attribute{Computed: true},
+										"range_end":   schema.Float64Attribute{Computed: true},
+									},
+								},
+							},
+							"schedule_rules": schema.ListNestedAttribute{
+								Computed: true,
+								NestedObject: schema.NestedAttributeObject{
+									Attributes: map[string]schema.Attribute{
+										"timestamp": schema.StringAttribute{Computed: true},
+										"enabled":   schema.BoolAttribute{Computed: true},
+									},
+								},
+							},
+							"experiment_id": schema.StringAttribute{Computed: true},
 							"variations": schema.ListNestedAttribute{
 								Computed: true,
 								NestedObject: schema.NestedAttributeObject{
@@ -73,6 +98,15 @@ func featureDataEnvironmentSchemaAttr() schema.MapNestedAttribute {
 									Attributes: map[string]schema.Attribute{
 										"id":        schema.StringAttribute{Computed: true},
 										"condition": schema.StringAttribute{Computed: true},
+									},
+								},
+							},
+							"saved_group_targeting": schema.ListNestedAttribute{
+								Computed: true,
+								NestedObject: schema.NestedAttributeObject{
+									Attributes: map[string]schema.Attribute{
+										"match_type":   schema.StringAttribute{Computed: true},
+										"saved_groups": schema.ListAttribute{ElementType: types.StringType, Computed: true},
 									},
 								},
 							},

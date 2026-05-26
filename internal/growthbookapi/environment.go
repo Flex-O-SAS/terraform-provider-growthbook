@@ -40,3 +40,8 @@ func (c *Client) FindEnvironmentByID(ctx context.Context, id string) (*Environme
 	}
 	return nil, ErrNotFound
 }
+
+// ListEnvironments fetches all environments.
+func (c *Client) ListEnvironments(ctx context.Context) ([]Environment, error) {
+	return fetcher[Environment](c, "GET", "/environments").All(ctx, nil, "environments")
+}

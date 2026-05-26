@@ -27,6 +27,8 @@ type ClientAPI interface {
 	DeleteProject(ctx context.Context, id string) error
 	// FindEnvironmentByID retrieves an environment by its ID.
 	FindEnvironmentByID(ctx context.Context, id string) (*Environment, error)
+	// ListEnvironments retrieves all environments.
+	ListEnvironments(ctx context.Context) ([]Environment, error)
 	// CreateEnvironment creates a new environment.
 	CreateEnvironment(ctx context.Context, e *Environment) (*Environment, error)
 	// UpdateEnvironment updates an existing environment by its ID.

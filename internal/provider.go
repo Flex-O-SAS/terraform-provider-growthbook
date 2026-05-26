@@ -79,6 +79,7 @@ func Provider() *schema.Provider {
 		DataSourcesMap: map[string]*schema.Resource{
 			"growthbook_project":        dataSourceProject(),
 			"growthbook_environment":    dataSourceEnvironment(),
+			"growthbook_environments":   dataSourceEnvironments(),
 			"growthbook_feature":        dataSourceFeature(),
 			"growthbook_sdk_connection": dataSourceSDKConnection(),
 		},

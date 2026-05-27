@@ -1,11 +1,17 @@
+---
 name: release-on-merge
 
-on:
+on:  # yamllint disable-line rule:truthy
   pull_request:
     types:
       - closed
     branches:
       - main
+
+env:
+  # Prefixed with REPO_ to avoid env conflicts
+  REPO_INITIAL_VERSION: "0.1.0"
+  REPO_TAG_PREFIX: "v"
 
 jobs:
   release:
@@ -16,23 +22,115 @@ jobs:
       contents: write
       pull-requests: write
     steps:
+      - name: Fetch latest release
+        id: last-release
+        uses: InsonusK/get-latest-release@v1.1.0
+        with:
+          myToken: ${{ secrets.GITHUB_TOKEN }}
+          exclude_types: "draft|prerelease"
+
+      - name: Compute next tag
+        if: ${{ steps.last-release.outcome == 'success' && steps.last-release.outputs.tag_name != '' }}
+        id: semver
+        continue-on-error: true
+        uses: ietf-tools/semver-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          noVersionBumpBehavior: patch  # This mimics tag_version step's DEFAULT_BUMP by forcing a patch bump even if no bump is expected from convention
+          noNewCommitBehavior: silent
+          minorList: feat
+          patchList: fix, chore, test
+          skipInvalidTags: true
+          branch: ${{ github.event.repository.default_branch }}
+
+      - name: Notify failure
+        if: ${{ steps.semver.outcome == 'failure' }}
+        uses: peter-evans/create-or-update-comment@v5
+        with:
+          issue-number: ${{ github.event.number }}
+          reactions: confused
+          body: |
+            :x: Post merge action failed. Unable to compute next tag according to semantic
+            versioning. See [job details].
+
+            [job details]: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+      - name: Notify no bump
+        if: ${{ steps.semver.outcome != 'skipped' && steps.semver.outcome != 'failure' && steps.semver.outputs.bump == 'none' }}
+        uses: peter-evans/create-or-update-comment@v5
+        with:
+          issue-number: ${{ github.event.number }}
+          reactions: nobell
+          body: |
+            :mute: No version bump. See [job details].
+
+            [job details]: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+      - name: Set job status
+        if: ${{ steps.semver.outcome == 'failure' }}
+        uses: actions/github-script@v8
+        with:
+          script: |
+            core.setFailed('invalid semantic versioning')
+
+      # set-tag is run when no tag exists (to ensure a tag exists next time) or if there is a bump from latest tag
+      - name: Set tag
+        id: set-tag
+        continue-on-error: true
+        if: ${{ (steps.last-release.outcome == 'success' && steps.last-release.outputs.tag_name == '') || (steps.semver.outputs.bump != null && steps.semver.outputs.bump != 'none') }}
+        run: |
+          no_tag_in_repo="${{ steps.last-release.outcome == 'success' && steps.last-release.outputs.tag_name == '' }}"
+          if [ "${no_tag_in_repo}" == "true" ]; then
+            tag_value="${{ env.REPO_TAG_PREFIX }}${{ env.REPO_INITIAL_TAG }}"
+          else
+            if [ -n "${{ env.REPO_TAG_PREFIX }}" ]; then
+              tag_value="${{ steps.semver.outputs.next }}"
+            else
+              tag_value="${{ steps.semver.outputs.nextStrict }}"
+            fi
+          fi
+          echo "tag_value: ${tag_value}"
+          echo "tag_value=${tag_value}" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Notify failure
+        if: ${{ steps.set-tag.outcome == 'failure' }}
+        uses: peter-evans/create-or-update-comment@v5
+        with:
+          issue-number: ${{ github.event.number }}
+          reactions: confused
+          body: |
+            :x: Post merge action failed. Unable to set tag value. See [job details].
+
+            [job details]: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+      - name: Set job status
+        if: ${{ steps.set-tag.outcome == 'failure' }}
+        uses: actions/github-script@v8
+        with:
+          script: |
+            core.setFailed('could not set tag value')
+
       - name: Checkout code
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: Bump version and create tag
+      # Unless there is a failure in set-tag step, a tag will be provided due to noVersionBumpBehavior in semver step
+      - name: Create tag
         id: tag_version
         uses: anothrNick/github-tag-action@1.75.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DEFAULT_BUMP: patch
-          WITH_V: true
-          RELEASE_BRANCHES: main
           DRY_RUN: false
-          INITIAL_VERSION: 0.1.0
+          CUSTOM_TAG: ${{ steps.set-tag.outputs.tag_value }}
+          # These are useless with CUSTOM_TAG but are kept to see behaviour difference as computations are still performed and output
+          DEFAULT_BUMP: patch
+          TAG_PREFIX: ${{ env.REPO_TAG_PREFIX }}
+          RELEASE_BRANCHES: ${{ github.event.repository.default_branch }}
+          INITIAL_VERSION: ${{ env.REPO_INITIAL_TAG }}
           TAG_CONTEXT: repo
-          CONVENTIONAL_COMMITS: true
+
       - name: Comment on PR with new tag
         uses: actions/github-script@v8
         with:

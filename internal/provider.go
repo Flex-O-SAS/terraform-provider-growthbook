@@ -186,6 +186,7 @@ func (p *growthbookProvider) DataSources(_ context.Context) []func() datasource.
 	return []func() datasource.DataSource{
 		newProjectDataSource,
 		newEnvironmentDataSource,
+		newEnvironmentsDataSource,
 		newFeatureDataSource,
 		newSDKConnectionDataSource,
 		newAttributeDataSource,

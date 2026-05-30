@@ -16,6 +16,17 @@ func (c *Client) CreateFeature(ctx context.Context, f *Feature) (*Feature, error
 	if err != nil {
 		return nil, err
 	}
+	if featureNeedsFollowUpUpdate(f) {
+		id := out.ID
+		if id == "" {
+			id = f.ID
+		}
+		updated, err := c.UpdateFeature(ctx, id, f)
+		if err != nil {
+			return nil, err
+		}
+		return updated, nil
+	}
 	return &out, nil
 }
 
@@ -60,4 +71,18 @@ func (c *Client) FindFeatureByName(ctx context.Context, id string) (*Feature, er
 		}
 	}
 	return nil, ErrNotFound
+}
+
+func featureNeedsFollowUpUpdate(f *Feature) bool {
+	if f == nil {
+		return false
+	}
+	for _, env := range f.Environments {
+		for _, rule := range env.Rules {
+			if len(rule.SavedGroupTargeting) > 0 || len(rule.ScheduleRules) > 0 {
+				return true
+			}
+		}
+	}
+	return false
 }

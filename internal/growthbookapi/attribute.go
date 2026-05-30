@@ -6,12 +6,12 @@ import (
 )
 
 type AttributeUpdateBody struct {
-	DataType	string	  `json:"datatype"`
-	Format		string	  `json:"format"`
-	EnumValues	string	  `json:"enum"`
-	Projects	[]string  `json:"projects"`
-	Archived	bool	  `json:"archived"`
-	Description	string	  `json:"description"`
+	DataType    string   `json:"datatype"`
+	Format      string   `json:"format"`
+	EnumValues  string   `json:"enum"`
+	Projects    []string `json:"projects"`
+	Archived    bool     `json:"archived"`
+	Description string   `json:"description"`
 }
 
 func (c *Client) CreateAttribute(ctx context.Context, a *Attribute) (*Attribute, error) {
@@ -37,12 +37,12 @@ func (c *Client) GetAttribute(ctx context.Context, property string) (*Attribute,
 
 func (c *Client) UpdateAttribute(ctx context.Context, property string, a *Attribute) (*Attribute, error) {
 	body := &AttributeUpdateBody{
-		DataType: 		a.DataType,
-		Format: 		a.Format,
-		EnumValues:		a.EnumValues,
-		Projects:		a.Projects,
-		Archived:		a.Archived,
-		Description:	a.Description,
+		DataType:    a.DataType,
+		Format:      a.Format,
+		EnumValues:  a.EnumValues,
+		Projects:    a.Projects,
+		Archived:    a.Archived,
+		Description: a.Description,
 	}
 	out, err := fetcher[Attribute](c, "PUT", "/attributes/"+property).One(ctx, body, "attribute")
 	if err != nil {

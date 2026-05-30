@@ -187,7 +187,7 @@ func (d *sdkConnectionDataSource) Read(ctx context.Context, req datasource.ReadR
 	data.Language = types.StringValue(conn.Language)
 	data.SdkVersion = types.StringValue(conn.SdkVersion)
 	data.Environment = types.StringValue(conn.Environment)
-	data.Projects = stringsToList(ctx, conn.Projects)
+	data.Projects = stringsToList(conn.Projects)
 	data.EncryptPayload = types.BoolValue(conn.EncryptPayload)
 	data.EncryptionKey = types.StringValue(conn.EncryptionKey)
 	data.IncludeVisualExperiments = types.BoolValue(conn.IncludeVisualExperiments)

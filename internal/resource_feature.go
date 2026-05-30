@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"errors"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -38,17 +39,25 @@ type featureEnvironmentModel struct {
 
 // featureRuleModel maps a single targeting rule (force / rollout / experiment-ref).
 type featureRuleModel struct {
-	ID            types.String            `tfsdk:"id"`
-	Type          types.String            `tfsdk:"type"`
-	Enabled       types.Bool              `tfsdk:"enabled"`
-	Description   types.String            `tfsdk:"description"`
-	Condition     types.String            `tfsdk:"condition"`
-	Value         types.String            `tfsdk:"value"`
-	Coverage      types.Float64           `tfsdk:"coverage"`
-	HashAttribute types.String            `tfsdk:"hash_attribute"`
-	ExperimentID  types.String            `tfsdk:"experiment_id"`
-	Variations    []featureVariationModel `tfsdk:"variations"`
-	Prerequisites []featurePrereqModel    `tfsdk:"prerequisites"`
+	ID                  types.String                      `tfsdk:"id"`
+	Type                types.String                      `tfsdk:"type"`
+	Enabled             types.Bool                        `tfsdk:"enabled"`
+	Description         types.String                      `tfsdk:"description"`
+	Condition           types.String                      `tfsdk:"condition"`
+	Value               types.String                      `tfsdk:"value"`
+	Coverage            types.Float64                     `tfsdk:"coverage"`
+	HashAttribute       types.String                      `tfsdk:"hash_attribute"`
+	FallbackAttribute   types.String                      `tfsdk:"fallback_attribute"`
+	HashVersion         types.Int64                       `tfsdk:"hash_version"`
+	Seed                types.String                      `tfsdk:"seed"`
+	TrackingKey         types.String                      `tfsdk:"tracking_key"`
+	ScheduleType        types.String                      `tfsdk:"schedule_type"`
+	Namespace           []featureNamespaceModel           `tfsdk:"namespace"`
+	ScheduleRules       []featureScheduleRuleModel        `tfsdk:"schedule_rules"`
+	ExperimentID        types.String                      `tfsdk:"experiment_id"`
+	Variations          []featureVariationModel           `tfsdk:"variations"`
+	Prerequisites       []featurePrereqModel              `tfsdk:"prerequisites"`
+	SavedGroupTargeting []featureSavedGroupTargetingModel `tfsdk:"saved_group_targeting"`
 }
 
 // featureVariationModel maps a single experiment-ref variation.
@@ -61,6 +70,26 @@ type featureVariationModel struct {
 type featurePrereqModel struct {
 	ID        types.String `tfsdk:"id"`
 	Condition types.String `tfsdk:"condition"`
+}
+
+// featureSavedGroupTargetingModel maps a saved group targeting entry on a rule.
+type featureSavedGroupTargetingModel struct {
+	MatchType   types.String `tfsdk:"match_type"`
+	SavedGroups types.List   `tfsdk:"saved_groups"`
+}
+
+// featureNamespaceModel maps a traffic namespace on a rule.
+type featureNamespaceModel struct {
+	Enabled    types.Bool    `tfsdk:"enabled"`
+	Name       types.String  `tfsdk:"name"`
+	RangeStart types.Float64 `tfsdk:"range_start"`
+	RangeEnd   types.Float64 `tfsdk:"range_end"`
+}
+
+// featureScheduleRuleModel maps a time-based schedule entry.
+type featureScheduleRuleModel struct {
+	Timestamp types.String `tfsdk:"timestamp"`
+	Enabled   types.Bool   `tfsdk:"enabled"`
 }
 
 type featureModel struct {
@@ -95,17 +124,48 @@ func featureVariationObjectType() types.ObjectType {
 
 func featureRuleObjectType() types.ObjectType {
 	return types.ObjectType{AttrTypes: map[string]attr.Type{
-		"id":             types.StringType,
-		"type":           types.StringType,
-		"enabled":        types.BoolType,
-		"description":    types.StringType,
-		"condition":      types.StringType,
-		"value":          types.StringType,
-		"coverage":       types.Float64Type,
-		"hash_attribute": types.StringType,
-		"experiment_id":  types.StringType,
-		"variations":     types.ListType{ElemType: featureVariationObjectType()},
-		"prerequisites":  types.ListType{ElemType: featurePrereqObjectType()},
+		"id":                    types.StringType,
+		"type":                  types.StringType,
+		"enabled":               types.BoolType,
+		"description":           types.StringType,
+		"condition":             types.StringType,
+		"value":                 types.StringType,
+		"coverage":              types.Float64Type,
+		"hash_attribute":        types.StringType,
+		"fallback_attribute":    types.StringType,
+		"hash_version":          types.Int64Type,
+		"seed":                  types.StringType,
+		"tracking_key":          types.StringType,
+		"schedule_type":         types.StringType,
+		"namespace":             types.ListType{ElemType: featureNamespaceObjectType()},
+		"schedule_rules":        types.ListType{ElemType: featureScheduleRuleObjectType()},
+		"experiment_id":         types.StringType,
+		"variations":            types.ListType{ElemType: featureVariationObjectType()},
+		"prerequisites":         types.ListType{ElemType: featurePrereqObjectType()},
+		"saved_group_targeting": types.ListType{ElemType: featureSavedGroupTargetingObjectType()},
+	}}
+}
+
+func featureSavedGroupTargetingObjectType() types.ObjectType {
+	return types.ObjectType{AttrTypes: map[string]attr.Type{
+		"match_type":   types.StringType,
+		"saved_groups": types.ListType{ElemType: types.StringType},
+	}}
+}
+
+func featureNamespaceObjectType() types.ObjectType {
+	return types.ObjectType{AttrTypes: map[string]attr.Type{
+		"enabled":     types.BoolType,
+		"name":        types.StringType,
+		"range_start": types.Float64Type,
+		"range_end":   types.Float64Type,
+	}}
+}
+
+func featureScheduleRuleObjectType() types.ObjectType {
+	return types.ObjectType{AttrTypes: map[string]attr.Type{
+		"timestamp": types.StringType,
+		"enabled":   types.BoolType,
 	}}
 }
 
@@ -170,6 +230,79 @@ func featureEnvironmentSchemaAttr() schema.MapNestedAttribute {
 								Computed: true,
 								Default:  stringdefault.StaticString(""),
 							},
+							"fallback_attribute": schema.StringAttribute{
+								Optional:    true,
+								Computed:    true,
+								Default:     stringdefault.StaticString(""),
+								Description: "Fallback attribute for sticky bucketing.",
+							},
+							"hash_version": schema.Int64Attribute{
+								Optional:    true,
+								Computed:    true,
+								Description: "Hash version (1 or 2).",
+							},
+							"seed": schema.StringAttribute{
+								Optional:    true,
+								Computed:    true,
+								Default:     stringdefault.StaticString(""),
+								Description: "Random seed for hashing.",
+							},
+							"tracking_key": schema.StringAttribute{
+								Optional:    true,
+								Computed:    true,
+								Default:     stringdefault.StaticString(""),
+								Description: "Tracking key for experiment analytics.",
+							},
+							"schedule_type": schema.StringAttribute{
+								Optional:    true,
+								Computed:    true,
+								Default:     stringdefault.StaticString(""),
+								Description: "Schedule type: none, schedule, or ramp.",
+							},
+							"namespace": schema.ListNestedAttribute{
+								Optional:    true,
+								Computed:    true,
+								Description: "Traffic namespace for the rule.",
+								NestedObject: schema.NestedAttributeObject{
+									Attributes: map[string]schema.Attribute{
+										"enabled": schema.BoolAttribute{
+											Required: true,
+										},
+										"name": schema.StringAttribute{
+											Required:    true,
+											Description: "Namespace identifier.",
+										},
+										"range_start": schema.Float64Attribute{
+											Required:    true,
+											Description: "Start of the namespace range (0-1).",
+										},
+										"range_end": schema.Float64Attribute{
+											Required:    true,
+											Description: "End of the namespace range (0-1).",
+										},
+									},
+								},
+								Default: listdefault.StaticValue(types.ListValueMust(featureNamespaceObjectType(), []attr.Value{})),
+							},
+							"schedule_rules": schema.ListNestedAttribute{
+								Optional:    true,
+								Computed:    true,
+								Description: "Time-based schedule rules for enabling/disabling.",
+								NestedObject: schema.NestedAttributeObject{
+									Attributes: map[string]schema.Attribute{
+										"timestamp": schema.StringAttribute{
+											Optional:    true,
+											Computed:    true,
+											Description: "ISO timestamp for the schedule event.",
+										},
+										"enabled": schema.BoolAttribute{
+											Required:    true,
+											Description: "Whether the rule is enabled at this time.",
+										},
+									},
+								},
+								Default: listdefault.StaticValue(types.ListValueMust(featureScheduleRuleObjectType(), []attr.Value{})),
+							},
 							"experiment_id": schema.StringAttribute{
 								Optional: true,
 								Computed: true,
@@ -210,6 +343,24 @@ func featureEnvironmentSchemaAttr() schema.MapNestedAttribute {
 									"id":        types.StringType,
 									"condition": types.StringType,
 								}}, []attr.Value{})),
+							},
+							"saved_group_targeting": schema.ListNestedAttribute{
+								Optional: true,
+								Computed: true,
+								NestedObject: schema.NestedAttributeObject{
+									Attributes: map[string]schema.Attribute{
+										"match_type": schema.StringAttribute{
+											Required:    true,
+											Description: "How to match saved groups: all, none, or any.",
+										},
+										"saved_groups": schema.ListAttribute{
+											ElementType: types.StringType,
+											Required:    true,
+											Description: "List of saved group IDs to target.",
+										},
+									},
+								},
+								Default: listdefault.StaticValue(types.ListValueMust(featureSavedGroupTargetingObjectType(), []attr.Value{})),
 							},
 						},
 					},
@@ -350,6 +501,10 @@ func (r *featureResource) Read(ctx context.Context, req resource.ReadRequest, re
 
 	feature, err := r.client.GetFeature(ctx, data.ID.ValueString())
 	if err != nil {
+		if errors.Is(err, growthbookapi.ErrNotFound) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Error reading feature", err.Error())
 		return
 	}
@@ -447,8 +602,8 @@ func featureModelFromAPI(ctx context.Context, m *featureModel, f *growthbookapi.
 	m.Project = types.StringValue(f.Project)
 	m.ValueType = types.StringValue(f.ValueType)
 	m.DefaultValue = types.StringValue(f.DefaultValue)
-	m.Tags = stringsToList(ctx, f.Tags)
-	m.Prerequisites = stringsToList(ctx, f.Prerequisites)
+	m.Tags = stringsToList(f.Tags)
+	m.Prerequisites = stringsToList(f.Prerequisites)
 
 	envsMap := envsFromAPI(f.Environments)
 	var d diag.Diagnostics
@@ -478,21 +633,33 @@ func rulesFromAPI(rules []growthbookapi.FeatureRule) []featureRuleModel {
 	out := make([]featureRuleModel, len(rules))
 	for i, r := range rules {
 		rm := featureRuleModel{
-			ID:            types.StringValue(r.ID),
-			Type:          types.StringValue(r.Type),
-			Enabled:       types.BoolValue(r.Enabled),
-			Description:   types.StringValue(r.Description),
-			Condition:     types.StringValue(r.Condition),
-			Value:         types.StringValue(r.Value),
-			HashAttribute: types.StringValue(r.HashAttribute),
-			ExperimentID:  types.StringValue(r.ExperimentID),
-			Variations:    variationsFromAPI(r.Variations),
-			Prerequisites: rulePrereqsFromAPI(r.Prerequisites),
+			ID:                  types.StringValue(r.ID),
+			Type:                types.StringValue(r.Type),
+			Enabled:             types.BoolValue(r.Enabled),
+			Description:         types.StringValue(r.Description),
+			Condition:           types.StringValue(r.Condition),
+			Value:               types.StringValue(r.Value),
+			HashAttribute:       types.StringValue(r.HashAttribute),
+			FallbackAttribute:   types.StringValue(r.FallbackAttribute),
+			Seed:                types.StringValue(r.Seed),
+			TrackingKey:         types.StringValue(r.TrackingKey),
+			ScheduleType:        types.StringValue(r.ScheduleType),
+			ExperimentID:        types.StringValue(r.ExperimentID),
+			Variations:          variationsFromAPI(r.Variations),
+			Prerequisites:       rulePrereqsFromAPI(r.Prerequisites),
+			SavedGroupTargeting: savedGroupTargetingFromAPI(r.SavedGroupTargeting),
+			Namespace:           namespaceFromAPI(r.Namespace),
+			ScheduleRules:       scheduleRulesFromAPI(r.ScheduleRules),
 		}
 		if r.Coverage != nil {
 			rm.Coverage = types.Float64Value(*r.Coverage)
 		} else {
 			rm.Coverage = types.Float64Null()
+		}
+		if r.HashVersion != nil {
+			rm.HashVersion = types.Int64Value(int64(*r.HashVersion))
+		} else {
+			rm.HashVersion = types.Int64Null()
 		}
 		out[i] = rm
 	}
@@ -521,6 +688,17 @@ func rulePrereqsFromAPI(prereqs []growthbookapi.FeaturePrerequisite) []featurePr
 	return out
 }
 
+func savedGroupTargetingFromAPI(sgt []growthbookapi.FeatureSavedGroupTargeting) []featureSavedGroupTargetingModel {
+	out := make([]featureSavedGroupTargetingModel, len(sgt))
+	for i, s := range sgt {
+		out[i] = featureSavedGroupTargetingModel{
+			MatchType:   types.StringValue(s.MatchType),
+			SavedGroups: stringsToList(s.SavedGroups),
+		}
+	}
+	return out
+}
+
 // envsToAPI converts Terraform model environments to API environments.
 func envsToAPI(envs map[string]featureEnvironmentModel) map[string]growthbookapi.FeatureEnvironmentConfig {
 	if envs == nil {
@@ -541,20 +719,31 @@ func rulesToAPI(rules []featureRuleModel) []growthbookapi.FeatureRule {
 	out := make([]growthbookapi.FeatureRule, len(rules))
 	for i, r := range rules {
 		ar := growthbookapi.FeatureRule{
-			ID:            r.ID.ValueString(),
-			Type:          r.Type.ValueString(),
-			Enabled:       r.Enabled.ValueBool(),
-			Description:   r.Description.ValueString(),
-			Condition:     r.Condition.ValueString(),
-			Value:         r.Value.ValueString(),
-			HashAttribute: r.HashAttribute.ValueString(),
-			ExperimentID:  r.ExperimentID.ValueString(),
-			Variations:    variationsToAPI(r.Variations),
-			Prerequisites: rulePrereqsToAPI(r.Prerequisites),
+			ID:                  r.ID.ValueString(),
+			Type:                r.Type.ValueString(),
+			Enabled:             r.Enabled.ValueBool(),
+			Description:         r.Description.ValueString(),
+			Condition:           r.Condition.ValueString(),
+			Value:               r.Value.ValueString(),
+			HashAttribute:       r.HashAttribute.ValueString(),
+			FallbackAttribute:   r.FallbackAttribute.ValueString(),
+			Seed:                r.Seed.ValueString(),
+			TrackingKey:         r.TrackingKey.ValueString(),
+			ScheduleType:        r.ScheduleType.ValueString(),
+			ExperimentID:        r.ExperimentID.ValueString(),
+			Variations:          variationsToAPI(r.Variations),
+			Prerequisites:       rulePrereqsToAPI(r.Prerequisites),
+			SavedGroupTargeting: savedGroupTargetingToAPI(r.SavedGroupTargeting),
+			Namespace:           namespaceToAPI(r.Namespace),
+			ScheduleRules:       scheduleRulesToAPI(r.ScheduleRules),
 		}
 		if !r.Coverage.IsNull() && !r.Coverage.IsUnknown() {
 			v := r.Coverage.ValueFloat64()
 			ar.Coverage = &v
+		}
+		if !r.HashVersion.IsNull() && !r.HashVersion.IsUnknown() {
+			v := int(r.HashVersion.ValueInt64())
+			ar.HashVersion = &v
 		}
 		out[i] = ar
 	}
@@ -578,6 +767,72 @@ func rulePrereqsToAPI(prereqs []featurePrereqModel) []growthbookapi.FeaturePrere
 		out[i] = growthbookapi.FeaturePrerequisite{
 			ID:        p.ID.ValueString(),
 			Condition: p.Condition.ValueString(),
+		}
+	}
+	return out
+}
+
+func savedGroupTargetingToAPI(sgt []featureSavedGroupTargetingModel) []growthbookapi.FeatureSavedGroupTargeting {
+	out := make([]growthbookapi.FeatureSavedGroupTargeting, len(sgt))
+	for i, s := range sgt {
+		var groups []string
+		s.SavedGroups.ElementsAs(context.Background(), &groups, false)
+		out[i] = growthbookapi.FeatureSavedGroupTargeting{
+			MatchType:   s.MatchType.ValueString(),
+			SavedGroups: groups,
+		}
+	}
+	return out
+}
+
+func namespaceFromAPI(ns *growthbookapi.FeatureNamespace) []featureNamespaceModel {
+	if ns == nil {
+		return []featureNamespaceModel{}
+	}
+	return []featureNamespaceModel{{
+		Enabled:    types.BoolValue(ns.Enabled),
+		Name:       types.StringValue(ns.Name),
+		RangeStart: types.Float64Value(ns.Range[0]),
+		RangeEnd:   types.Float64Value(ns.Range[1]),
+	}}
+}
+
+func namespaceToAPI(ns []featureNamespaceModel) *growthbookapi.FeatureNamespace {
+	if len(ns) == 0 {
+		return nil
+	}
+	return &growthbookapi.FeatureNamespace{
+		Enabled: ns[0].Enabled.ValueBool(),
+		Name:    ns[0].Name.ValueString(),
+		Range:   [2]float64{ns[0].RangeStart.ValueFloat64(), ns[0].RangeEnd.ValueFloat64()},
+	}
+}
+
+func scheduleRulesFromAPI(rules []growthbookapi.FeatureScheduleRule) []featureScheduleRuleModel {
+	out := make([]featureScheduleRuleModel, len(rules))
+	for i, r := range rules {
+		ts := types.StringValue("")
+		if r.Timestamp != nil {
+			ts = types.StringValue(*r.Timestamp)
+		}
+		out[i] = featureScheduleRuleModel{
+			Timestamp: ts,
+			Enabled:   types.BoolValue(r.Enabled),
+		}
+	}
+	return out
+}
+
+func scheduleRulesToAPI(rules []featureScheduleRuleModel) []growthbookapi.FeatureScheduleRule {
+	out := make([]growthbookapi.FeatureScheduleRule, len(rules))
+	for i, r := range rules {
+		var ts *string
+		if v := r.Timestamp.ValueString(); v != "" {
+			ts = &v
+		}
+		out[i] = growthbookapi.FeatureScheduleRule{
+			Timestamp: ts,
+			Enabled:   r.Enabled.ValueBool(),
 		}
 	}
 	return out

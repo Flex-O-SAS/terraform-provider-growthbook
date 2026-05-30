@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"errors"
 	"slices"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -130,7 +131,7 @@ func (r *attributeResource) Create(ctx context.Context, req resource.CreateReque
 	data.DataType = types.StringValue(created.DataType)
 	data.Format = types.StringValue(created.Format)
 	data.EnumValues = types.StringValue(created.EnumValues)
-	data.Projects = stringsToList(ctx, created.Projects)
+	data.Projects = stringsToList(created.Projects)
 	data.Archived = types.BoolValue(created.Archived)
 	data.Description = types.StringValue(created.Description)
 
@@ -146,11 +147,15 @@ func (r *attributeResource) Read(ctx context.Context, req resource.ReadRequest, 
 
 	out, err := r.client.GetAttribute(ctx, data.Property.ValueString())
 	if err != nil {
+		if errors.Is(err, growthbookapi.ErrNotFound) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Error reading attribute", err.Error())
 		return
 	}
 	if out == nil {
-		resp.Diagnostics.AddError("Attribute not found", "Attribute with property '"+data.Property.ValueString()+"' was not found.")
+		resp.State.RemoveResource(ctx)
 		return
 	}
 
@@ -158,7 +163,7 @@ func (r *attributeResource) Read(ctx context.Context, req resource.ReadRequest, 
 	data.DataType = types.StringValue(out.DataType)
 	data.Format = types.StringValue(out.Format)
 	data.EnumValues = types.StringValue(out.EnumValues)
-	data.Projects = stringsToList(ctx, out.Projects)
+	data.Projects = stringsToList(out.Projects)
 	data.Archived = types.BoolValue(out.Archived)
 	data.Description = types.StringValue(out.Description)
 

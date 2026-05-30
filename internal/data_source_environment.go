@@ -89,7 +89,7 @@ func (d *environmentDataSource) Read(ctx context.Context, req datasource.ReadReq
 	data.Description = types.StringValue(env.Description)
 	data.ToggleOnList = types.BoolValue(env.ToggleOnList)
 	data.DefaultState = types.BoolValue(env.DefaultState)
-	data.Projects = stringsToList(ctx, env.Projects)
+	data.Projects = stringsToList(env.Projects)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }

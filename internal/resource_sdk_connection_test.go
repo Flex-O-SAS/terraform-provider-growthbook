@@ -30,13 +30,32 @@ data "growthbook_sdk_connection" "hh" {
 `
 }
 
+func testAccSDKConnectionSavedGroupConfig(name string) string {
+	return `
+resource "growthbook_project" "test" {
+  name = "` + name + `-proj"
+}
+resource "growthbook_environment" "test" {
+  name        = "` + name + `-env"
+  projects    = [growthbook_project.test.id]
+}
+resource "growthbook_sdk_connection" "test" {
+  name                           = "` + name + `"
+  language                       = "ios"
+  environment                    = growthbook_environment.test.id
+  projects                       = [growthbook_project.test.id]
+  saved_group_references_enabled = true
+}
+`
+}
+
 func TestAccGrowthBookSDKConnection_basic(t *testing.T) {
 	t.Parallel()
 
 	connName := acctest.RandomWithPrefix("tf-acc-sdkconn-")
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:          func() { testAccPreCheck(t) },
+		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProviderFactories,
 		Steps: []resource.TestStep{
 			{
@@ -76,6 +95,30 @@ func TestAccGrowthBookSDKConnection_basic(t *testing.T) {
 						}
 						return nil
 					}),
+				),
+			},
+		},
+	})
+}
+
+// TestAccGrowthBookSDKConnection_savedGroupReferences verifies that
+// saved_group_references_enabled=true is persisted correctly after create.
+// The GrowthBook API ignores this field on POST and always returns false;
+// the provider must issue a follow-up PUT to apply it.
+func TestAccGrowthBookSDKConnection_savedGroupReferences(t *testing.T) {
+	t.Parallel()
+
+	connName := acctest.RandomWithPrefix("tf-acc-sdkconn-sg-")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccSDKConnectionSavedGroupConfig(connName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("growthbook_sdk_connection.test", "name", connName),
+					resource.TestCheckResourceAttr("growthbook_sdk_connection.test", "saved_group_references_enabled", "true"),
 				),
 			},
 		},

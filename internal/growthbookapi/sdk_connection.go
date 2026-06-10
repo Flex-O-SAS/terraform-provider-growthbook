@@ -7,6 +7,11 @@ import (
 )
 
 // CreateSDKConnection creates a new SDK connection in GrowthBook.
+//
+// The GrowthBook API does not honour savedGroupReferencesEnabled on the POST
+// request — it always returns false.  If the requested value is true we issue
+// an immediate PUT to apply it before returning, so callers always receive a
+// result that matches what they asked for.
 func (c *Client) CreateSDKConnection(ctx context.Context, s *SDKConnection) (*SDKConnection, error) {
 	out, err := fetcher[SDKConnection](c, "POST", "/sdk-connections").One(ctx, s, "sdkConnection")
 	if err != nil {
@@ -14,6 +19,13 @@ func (c *Client) CreateSDKConnection(ctx context.Context, s *SDKConnection) (*SD
 	}
 	if len(out.Languages) != 0 {
 		out.Language = out.Languages[0]
+	}
+	if out.SavedGroupReferencesEnabled != s.SavedGroupReferencesEnabled {
+		updated, err := c.UpdateSDKConnection(ctx, out.ID, s)
+		if err != nil {
+			return nil, err
+		}
+		return updated, nil
 	}
 	return &out, nil
 }

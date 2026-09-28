@@ -93,7 +93,7 @@ func (d *attributeDataSource) Read(ctx context.Context, req datasource.ReadReque
 	data.DataType = types.StringValue(attribute.DataType)
 	data.Format = types.StringValue(attribute.Format)
 	data.EnumValues = types.StringValue(attribute.EnumValues)
-	data.Projects = stringsToList(ctx, attribute.Projects)
+	data.Projects = stringsToList(attribute.Projects)
 	data.Archived = types.BoolValue(attribute.Archived)
 	data.Description = types.StringValue(attribute.Description)
 

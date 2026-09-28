@@ -89,7 +89,7 @@ func (d *environmentsDataSource) Read(ctx context.Context, _ datasource.ReadRequ
 			Description:  types.StringValue(env.Description),
 			ToggleOnList: types.BoolValue(env.ToggleOnList),
 			DefaultState: types.BoolValue(env.DefaultState),
-			Projects:     stringsToList(ctx, env.Projects),
+			Projects:     stringsToList(env.Projects),
 		}
 	}
 

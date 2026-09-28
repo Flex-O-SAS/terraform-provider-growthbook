@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"errors"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -178,7 +179,7 @@ func sdkConnToModel(ctx context.Context, conn *growthbookapi.SDKConnection) sdkC
 		Language:                    types.StringValue(conn.Language),
 		Environment:                 types.StringValue(conn.Environment),
 		SdkVersion:                  types.StringValue(conn.SdkVersion),
-		Projects:                    stringsToList(ctx, conn.Projects),
+		Projects:                    stringsToList(conn.Projects),
 		EncryptPayload:              types.BoolValue(conn.EncryptPayload),
 		IncludeVisualExperiments:    types.BoolValue(conn.IncludeVisualExperiments),
 		IncludeDraftExperiments:     types.BoolValue(conn.IncludeDraftExperiments),
@@ -255,6 +256,10 @@ func (r *sdkConnectionResource) Read(ctx context.Context, req resource.ReadReque
 
 	conn, err := r.client.GetSDKConnection(ctx, data.ID.ValueString())
 	if err != nil {
+		if errors.Is(err, growthbookapi.ErrNotFound) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Error reading SDK connection", err.Error())
 		return
 	}

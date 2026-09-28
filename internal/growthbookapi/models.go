@@ -1,5 +1,9 @@
 package growthbookapi
 
+import (
+	"encoding/json"
+)
+
 // Project represents a GrowthBook project object.
 type Project struct {
 	ID          string          `json:"id,omitempty"`
@@ -46,14 +50,34 @@ type FeatureRule struct {
 	Condition   string `json:"condition,omitempty"`
 	// force / rollout
 	Value string `json:"value,omitempty"`
-	// rollout only
-	Coverage      *float64 `json:"coverage,omitempty"`
-	HashAttribute string   `json:"hashAttribute,omitempty"`
+	// rollout / experiment
+	Coverage          *float64              `json:"coverage,omitempty"`
+	HashAttribute     string                `json:"hashAttribute,omitempty"`
+	FallbackAttribute string                `json:"fallbackAttribute,omitempty"`
+	HashVersion       *int                  `json:"hashVersion,omitempty"`
+	Seed              string                `json:"seed,omitempty"`
+	Namespace         *FeatureNamespace     `json:"namespace,omitempty"`
+	TrackingKey       string                `json:"trackingKey,omitempty"`
+	ScheduleRules     []FeatureScheduleRule `json:"scheduleRules,omitempty"`
+	ScheduleType      string                `json:"scheduleType,omitempty"`
 	// experiment-ref only
 	ExperimentID        string                       `json:"experimentId,omitempty"`
 	Variations          []FeatureVariation           `json:"variations,omitempty"`
 	SavedGroupTargeting []FeatureSavedGroupTargeting `json:"savedGroupTargeting,omitempty"`
 	Prerequisites       []FeaturePrerequisite        `json:"prerequisites,omitempty"`
+}
+
+// FeatureNamespace represents a traffic namespace for a rule.
+type FeatureNamespace struct {
+	Enabled bool       `json:"enabled"`
+	Name    string     `json:"name"`
+	Range   [2]float64 `json:"range,omitempty"`
+}
+
+// FeatureScheduleRule represents a time-based schedule entry for a rule.
+type FeatureScheduleRule struct {
+	Timestamp *string `json:"timestamp"`
+	Enabled   bool    `json:"enabled"`
 }
 
 // FeatureVariation represents a single variation in an experiment-ref rule.
@@ -131,4 +155,167 @@ type SDKConnection struct {
 	SseEnabled      bool   `json:"sseEnabled,omitempty"`
 	DateCreated     string `json:"dateCreated,omitempty"`
 	DateUpdated     string `json:"dateUpdated,omitempty"`
+}
+
+// SavedGroup represents a GrowthBook saved group.
+type SavedGroup struct {
+	ID           string   `json:"id,omitempty"`
+	Name         string   `json:"name"`
+	Type         string   `json:"type,omitempty"`
+	Condition    string   `json:"condition,omitempty"`
+	AttributeKey string   `json:"attributeKey,omitempty"`
+	Values       []string `json:"values,omitempty"`
+	Owner        string   `json:"owner,omitempty"`
+	Projects     []string `json:"projects,omitempty"`
+	Description  string   `json:"description,omitempty"`
+	DateCreated  string   `json:"dateCreated,omitempty"`
+	DateUpdated  string   `json:"dateUpdated,omitempty"`
+}
+
+// Segment represents a GrowthBook segment.
+type Segment struct {
+	ID             string   `json:"id,omitempty"`
+	Name           string   `json:"name"`
+	Owner          string   `json:"owner,omitempty"`
+	Description    string   `json:"description,omitempty"`
+	DatasourceID   string   `json:"datasourceId,omitempty"`
+	IdentifierType string   `json:"identifierType,omitempty"`
+	Type           string   `json:"type,omitempty"`
+	Query          string   `json:"query,omitempty"`
+	FactTableID    string   `json:"factTableId,omitempty"`
+	Projects       []string `json:"projects,omitempty"`
+	ManagedBy      string   `json:"managedBy,omitempty"`
+	DateCreated    string   `json:"dateCreated,omitempty"`
+	DateUpdated    string   `json:"dateUpdated,omitempty"`
+}
+
+// Metric represents a GrowthBook (legacy) metric.
+type Metric struct {
+	ID           string          `json:"id,omitempty"`
+	Name         string          `json:"name"`
+	Description  string          `json:"description,omitempty"`
+	Owner        string          `json:"owner,omitempty"`
+	DatasourceID string          `json:"datasourceId,omitempty"`
+	Type         string          `json:"type,omitempty"`
+	Tags         []string        `json:"tags,omitempty"`
+	Projects     []string        `json:"projects,omitempty"`
+	Archived     bool            `json:"archived"`
+	Behavior     json.RawMessage `json:"behavior,omitempty"`
+	SQL          json.RawMessage `json:"sql,omitempty"`
+	ManagedBy    string          `json:"managedBy,omitempty"`
+	DateCreated  string          `json:"dateCreated,omitempty"`
+	DateUpdated  string          `json:"dateUpdated,omitempty"`
+}
+
+// Dimension represents a GrowthBook dimension.
+type Dimension struct {
+	ID             string `json:"id,omitempty"`
+	Name           string `json:"name"`
+	Description    string `json:"description,omitempty"`
+	Owner          string `json:"owner,omitempty"`
+	DatasourceID   string `json:"datasourceId,omitempty"`
+	IdentifierType string `json:"identifierType,omitempty"`
+	Query          string `json:"query,omitempty"`
+	ManagedBy      string `json:"managedBy,omitempty"`
+	DateCreated    string `json:"dateCreated,omitempty"`
+	DateUpdated    string `json:"dateUpdated,omitempty"`
+}
+
+// FactTable represents a GrowthBook fact table.
+type FactTable struct {
+	ID          string   `json:"id,omitempty"`
+	Name        string   `json:"name"`
+	Description string   `json:"description,omitempty"`
+	Owner       string   `json:"owner,omitempty"`
+	Projects    []string `json:"projects,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
+	Datasource  string   `json:"datasource,omitempty"`
+	UserIDTypes []string `json:"userIdTypes,omitempty"`
+	SQL         string   `json:"sql,omitempty"`
+	EventName   string   `json:"eventName,omitempty"`
+	ManagedBy   string   `json:"managedBy,omitempty"`
+	Archived    bool     `json:"archived"`
+	DateCreated string   `json:"dateCreated,omitempty"`
+	DateUpdated string   `json:"dateUpdated,omitempty"`
+}
+
+// FactMetric represents a GrowthBook fact metric.
+type FactMetric struct {
+	ID                           string          `json:"id,omitempty"`
+	Name                         string          `json:"name"`
+	Description                  string          `json:"description,omitempty"`
+	Owner                        string          `json:"owner,omitempty"`
+	Projects                     []string        `json:"projects,omitempty"`
+	Tags                         []string        `json:"tags,omitempty"`
+	Datasource                   string          `json:"datasource,omitempty"`
+	MetricType                   string          `json:"metricType,omitempty"`
+	Numerator                    json.RawMessage `json:"numerator,omitempty"`
+	Denominator                  json.RawMessage `json:"denominator,omitempty"`
+	Inverse                      bool            `json:"inverse"`
+	CappingSettings              json.RawMessage `json:"cappingSettings,omitempty"`
+	WindowSettings               json.RawMessage `json:"windowSettings,omitempty"`
+	PriorSettings                json.RawMessage `json:"priorSettings,omitempty"`
+	RegressionAdjustmentSettings json.RawMessage `json:"regressionAdjustmentSettings,omitempty"`
+	RiskThresholdSuccess         *float64        `json:"riskThresholdSuccess,omitempty"`
+	RiskThresholdDanger          *float64        `json:"riskThresholdDanger,omitempty"`
+	MinPercentChange             *float64        `json:"minPercentChange,omitempty"`
+	MaxPercentChange             *float64        `json:"maxPercentChange,omitempty"`
+	MinSampleSize                *float64        `json:"minSampleSize,omitempty"`
+	TargetMDE                    *float64        `json:"targetMDE,omitempty"`
+	ManagedBy                    string          `json:"managedBy,omitempty"`
+	Archived                     bool            `json:"archived"`
+	DateCreated                  string          `json:"dateCreated,omitempty"`
+	DateUpdated                  string          `json:"dateUpdated,omitempty"`
+}
+
+// Namespace represents a GrowthBook namespace.
+type Namespace struct {
+	ID            string `json:"id,omitempty"`
+	DisplayName   string `json:"displayName,omitempty"`
+	Description   string `json:"description,omitempty"`
+	Status        string `json:"status,omitempty"`
+	Format        string `json:"format,omitempty"`
+	HashAttribute string `json:"hashAttribute,omitempty"`
+	Seed          string `json:"seed,omitempty"`
+}
+
+// Experiment represents a GrowthBook experiment.
+type Experiment struct {
+	ID                string          `json:"id,omitempty"`
+	Name              string          `json:"name"`
+	TrackingKey       string          `json:"trackingKey,omitempty"`
+	Type              string          `json:"type,omitempty"`
+	Project           string          `json:"project,omitempty"`
+	Hypothesis        string          `json:"hypothesis,omitempty"`
+	Description       string          `json:"description,omitempty"`
+	Tags              []string        `json:"tags,omitempty"`
+	Owner             string          `json:"owner,omitempty"`
+	Archived          bool            `json:"archived"`
+	Status            string          `json:"status,omitempty"`
+	AutoRefresh       bool            `json:"autoRefresh"`
+	HashAttribute     string          `json:"hashAttribute,omitempty"`
+	FallbackAttribute string          `json:"fallbackAttribute,omitempty"`
+	DatasourceID      string          `json:"datasourceId,omitempty"`
+	AssignmentQueryID string          `json:"assignmentQueryId,omitempty"`
+	SegmentID         string          `json:"segmentId,omitempty"`
+	Metrics           []string        `json:"metrics,omitempty"`
+	SecondaryMetrics  []string        `json:"secondaryMetrics,omitempty"`
+	GuardrailMetrics  []string        `json:"guardrailMetrics,omitempty"`
+	StatsEngine       string          `json:"statsEngine,omitempty"`
+	Variations        json.RawMessage `json:"variations,omitempty"`
+	Phases            json.RawMessage `json:"phases,omitempty"`
+	DateCreated       string          `json:"dateCreated,omitempty"`
+	DateUpdated       string          `json:"dateUpdated,omitempty"`
+}
+
+// DataSource represents a GrowthBook data source (read-only).
+type DataSource struct {
+	ID           string   `json:"id,omitempty"`
+	Name         string   `json:"name,omitempty"`
+	Type         string   `json:"type,omitempty"`
+	Description  string   `json:"description,omitempty"`
+	ProjectIDs   []string `json:"projectIds,omitempty"`
+	EventTracker string   `json:"eventTracker,omitempty"`
+	DateCreated  string   `json:"dateCreated,omitempty"`
+	DateUpdated  string   `json:"dateUpdated,omitempty"`
 }

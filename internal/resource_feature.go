@@ -491,6 +491,8 @@ func rulesFromAPI(rules []growthbookapi.FeatureRule) []featureRuleModel {
 		}
 		if r.Coverage != nil {
 			rm.Coverage = types.Float64Value(*r.Coverage)
+		} else if r.Type != "rollout" {
+			rm.Coverage = types.Float64Value(1.0)
 		} else {
 			rm.Coverage = types.Float64Null()
 		}
@@ -552,7 +554,7 @@ func rulesToAPI(rules []featureRuleModel) []growthbookapi.FeatureRule {
 			Variations:    variationsToAPI(r.Variations),
 			Prerequisites: rulePrereqsToAPI(r.Prerequisites),
 		}
-		if !r.Coverage.IsNull() && !r.Coverage.IsUnknown() {
+		if ar.Type == "rollout" && !r.Coverage.IsNull() && !r.Coverage.IsUnknown() {
 			v := r.Coverage.ValueFloat64()
 			ar.Coverage = &v
 		}

@@ -45,6 +45,10 @@ func (c *Client) UpdateFeature(ctx context.Context, id string, f *Feature) (*Fea
 
 // DeleteFeature removes a feature by its ID.
 func (c *Client) DeleteFeature(ctx context.Context, id string) error {
+	archive := map[string]any{"archived": true}
+	if _, err := fetcher[Feature](c, "POST", "/features/"+id).One(ctx, archive, "feature"); err != nil {
+		return err
+	}
 	return c.delete(ctx, "/features/"+id)
 }
 

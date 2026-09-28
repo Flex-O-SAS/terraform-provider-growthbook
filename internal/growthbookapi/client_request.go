@@ -91,7 +91,7 @@ func (c *Client) do(ctx context.Context, method, path string, body any) (*http.R
 		defer globalWriteMu.Unlock()
 	}
 
-	var buf io.Reader
+	var bodyBytes []byte
 	var bodyLog string
 
 	if body != nil {
@@ -99,7 +99,7 @@ func (c *Client) do(ctx context.Context, method, path string, body any) (*http.R
 		if err != nil {
 			return nil, err
 		}
-		buf = bytes.NewBuffer(b)
+		bodyBytes = b
 		bodyLog = string(b)
 	}
 	url := c.BaseURL + path
@@ -114,7 +114,7 @@ func (c *Client) do(ctx context.Context, method, path string, body any) (*http.R
 		},
 	)
 
-	resp, err := c.withRetry(ctx, method, url, buf)
+	resp, err := c.withRetry(ctx, method, url, bodyBytes)
 	if err != nil {
 		tflog.Debug(ctx,
 			"HTTP Response Error",
@@ -176,14 +176,20 @@ func (c *Client) retryAfter(
 
 // 1. success or non-retryable error, exit reties and return.
 // 2. close response body as it won't be closed by caller.
-func (c *Client) withRetry(ctx context.Context, method, url string, buf io.Reader) (*http.Response, error) {
+func (c *Client) withRetry(ctx context.Context, method, url string, body []byte) (*http.Response, error) {
 	var resp *http.Response
 	var err error
 
 	attempt := 0
 	interval := c.Backoff.InitialInterval
 	for {
-		req, reqErr := http.NewRequestWithContext(ctx, method, url, buf)
+		var reqBody io.Reader
+		if body != nil {
+			// Every attempt needs its own reader: the previous one consumed it.
+			reqBody = bytes.NewReader(body)
+		}
+
+		req, reqErr := http.NewRequestWithContext(ctx, method, url, reqBody)
 		if reqErr != nil {
 			return nil, reqErr
 		}
@@ -192,10 +198,14 @@ func (c *Client) withRetry(ctx context.Context, method, url string, buf io.Reade
 		req.Header.Set("Content-Type", "application/json")
 		resp, err = c.HTTPClient.Do(req)
 
+		if err == nil && resp.StatusCode == http.StatusTooManyRequests && attempt < c.Backoff.MaxRetries {
+			interval = c.retryAfter(ctx, resp, attempt, interval, c.Backoff.MaxInterval)
+			_ = resp.Body.Close()
+			attempt++
+			continue
+		}
+
 		if err == nil {
-			if resp.StatusCode == http.StatusTooManyRequests {
-				interval = c.retryAfter(ctx, resp, attempt, interval, c.Backoff.MaxInterval)
-			}
 			if resp.StatusCode < 500 {
 				// 1.
 				break
@@ -226,7 +236,7 @@ func (c *Client) withRetry(ctx context.Context, method, url string, buf io.Reade
 		time.Sleep(interval)
 		interval = time.Duration(math.Min(float64(c.Backoff.MaxInterval), float64(interval)*c.Backoff.Multiplier))
 		// 2.
-		if err != nil {
+		if resp != nil {
 			_ = resp.Body.Close()
 		}
 	}

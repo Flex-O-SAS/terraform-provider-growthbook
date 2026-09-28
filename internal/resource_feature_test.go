@@ -53,7 +53,7 @@ func TestAccGrowthBookFeature_basic(t *testing.T) {
 	featureID := acctest.RandomWithPrefix("tf-acc-feature-")
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:          func() { testAccPreCheck(t) },
+		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProviderFactories,
 		Steps: []resource.TestStep{
 			{
@@ -96,6 +96,69 @@ func TestAccGrowthBookFeature_basic(t *testing.T) {
 					resource.TestCheckResourceAttr("data.growthbook_feature.by_id", "default_value", "{\"key\": \"value\"}"),
 					resource.TestCheckResourceAttr("data.growthbook_feature.by_id", "tags.#", "1"),
 					resource.TestCheckResourceAttr("data.growthbook_feature.by_id", "tags.0", "new"),
+				),
+			},
+		},
+	})
+}
+
+func testAccFeatureWithRulesConfig(id, forceValue string) string {
+	return `
+resource "growthbook_feature" "test" {
+  name          = "` + id + `"
+  owner         = "owner@example.com"
+  value_type    = "boolean"
+  default_value = "false"
+  environments = {
+    production = {
+      enabled = true
+      rules = [
+        {
+          type      = "force"
+          enabled   = true
+          condition = "{\"id\":\"someone@example.com\"}"
+          value     = "` + forceValue + `"
+        },
+        {
+          type           = "rollout"
+          enabled        = true
+          value          = "true"
+          coverage       = 0.5
+          hash_attribute = "id"
+        },
+      ]
+    }
+  }
+}
+`
+}
+
+func TestAccGrowthBookFeature_forceAndRolloutRules(t *testing.T) {
+	t.Parallel()
+
+	featureID := acctest.RandomWithPrefix("tf-acc-feature-rules-")
+	const rules = "environments.production.rules"
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccFeatureWithRulesConfig(featureID, "true"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("growthbook_feature.test", rules+".#", "2"),
+					resource.TestCheckResourceAttr("growthbook_feature.test", rules+".0.type", "force"),
+					resource.TestCheckResourceAttr("growthbook_feature.test", rules+".0.value", "true"),
+					resource.TestCheckResourceAttr("growthbook_feature.test", rules+".1.type", "rollout"),
+					resource.TestCheckResourceAttr("growthbook_feature.test", rules+".1.coverage", "0.5"),
+				),
+			},
+			{
+				Config: testAccFeatureWithRulesConfig(featureID, "false"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("growthbook_feature.test", rules+".0.type", "force"),
+					resource.TestCheckResourceAttr("growthbook_feature.test", rules+".0.value", "false"),
+					resource.TestCheckResourceAttr("growthbook_feature.test", rules+".1.coverage", "0.5"),
 				),
 			},
 		},

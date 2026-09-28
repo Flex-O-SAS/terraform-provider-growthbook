@@ -58,6 +58,12 @@ func checkStatuses(method string, resp *http.Response) error {
 			return nil
 		}
 	}
+	if resp.Body != nil {
+		if b, err := io.ReadAll(resp.Body); err == nil && len(b) > 0 {
+			return fmt.Errorf("unexpected status %d: %s: %s",
+				resp.StatusCode, http.StatusText(resp.StatusCode), strings.TrimSpace(string(b)))
+		}
+	}
 	return fmt.Errorf("unexpected status %d: %s", resp.StatusCode, http.StatusText(resp.StatusCode))
 }
 
